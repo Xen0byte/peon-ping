@@ -9,7 +9,7 @@ SETTINGS="$HOME/.claude/settings.json"
 REPO_BASE="https://raw.githubusercontent.com/tonyyont/peon-ping/main"
 
 # All available sound packs (add new packs here)
-PACKS="peon ra2_soviet_engineer sc_battlecruiser sc_kerrigan"
+PACKS="peon peon_fr peasant peasant_fr ra2_soviet_engineer sc_battlecruiser sc_kerrigan"
 
 # --- Detect update vs fresh install ---
 UPDATING=false
