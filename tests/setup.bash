@@ -7,6 +7,7 @@ setup_test_env() {
 
   # Create directory structure
   mkdir -p "$TEST_DIR/packs/peon/sounds"
+  mkdir -p "$TEST_DIR/packs/sc_kerrigan/sounds"
 
   # Create minimal manifest
   cat > "$TEST_DIR/packs/peon/manifest.json" <<'JSON'
@@ -54,6 +55,30 @@ JSON
   # Create dummy sound files (empty but present)
   for f in Hello1.wav Hello2.wav Ack1.wav Done1.wav Done2.wav Error1.wav Perm1.wav Perm2.wav Angry1.wav; do
     touch "$TEST_DIR/packs/peon/sounds/$f"
+  done
+
+  # Create second pack manifest (for pack switching tests)
+  cat > "$TEST_DIR/packs/sc_kerrigan/manifest.json" <<'JSON'
+{
+  "name": "sc_kerrigan",
+  "display_name": "Sarah Kerrigan (StarCraft)",
+  "categories": {
+    "greeting": {
+      "sounds": [
+        { "file": "Hello1.wav", "line": "What now?" }
+      ]
+    },
+    "complete": {
+      "sounds": [
+        { "file": "Done1.wav", "line": "I gotcha." }
+      ]
+    }
+  }
+}
+JSON
+
+  for f in Hello1.wav Done1.wav; do
+    touch "$TEST_DIR/packs/sc_kerrigan/sounds/$f"
   done
 
   # Create default config

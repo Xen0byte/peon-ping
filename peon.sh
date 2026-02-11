@@ -19,11 +19,100 @@ case "${1:-}" in
   --status)
     [ -f "$PAUSED_FILE" ] && echo "peon-ping: paused" || echo "peon-ping: active"
     exit 0 ;;
+  --packs)
+    /usr/bin/python3 -c "
+import json, os, glob
+config_path = '$CONFIG'
+try:
+    active = json.load(open(config_path)).get('active_pack', 'peon')
+except:
+    active = 'peon'
+packs_dir = '$PEON_DIR/packs'
+for m in sorted(glob.glob(os.path.join(packs_dir, '*/manifest.json'))):
+    info = json.load(open(m))
+    name = info.get('name', os.path.basename(os.path.dirname(m)))
+    display = info.get('display_name', name)
+    marker = ' *' if name == active else ''
+    print(f'  {name:24s} {display}{marker}')
+"
+    exit 0 ;;
+  --pack)
+    PACK_ARG="${2:-}"
+    if [ -z "$PACK_ARG" ]; then
+      # No argument — cycle to next pack alphabetically
+      /usr/bin/python3 -c "
+import json, os, glob
+config_path = '$CONFIG'
+try:
+    cfg = json.load(open(config_path))
+except:
+    cfg = {}
+active = cfg.get('active_pack', 'peon')
+packs_dir = '$PEON_DIR/packs'
+names = sorted([
+    os.path.basename(os.path.dirname(m))
+    for m in glob.glob(os.path.join(packs_dir, '*/manifest.json'))
+])
+if not names:
+    print('Error: no packs found', flush=True)
+    raise SystemExit(1)
+try:
+    idx = names.index(active)
+    next_pack = names[(idx + 1) % len(names)]
+except ValueError:
+    next_pack = names[0]
+cfg['active_pack'] = next_pack
+json.dump(cfg, open(config_path, 'w'), indent=2)
+# Read display name
+mpath = os.path.join(packs_dir, next_pack, 'manifest.json')
+display = json.load(open(mpath)).get('display_name', next_pack)
+print(f'peon-ping: switched to {next_pack} ({display})')
+"
+    else
+      # Argument given — set specific pack
+      /usr/bin/python3 -c "
+import json, os, glob, sys
+config_path = '$CONFIG'
+pack_arg = '$PACK_ARG'
+packs_dir = '$PEON_DIR/packs'
+names = sorted([
+    os.path.basename(os.path.dirname(m))
+    for m in glob.glob(os.path.join(packs_dir, '*/manifest.json'))
+])
+if pack_arg not in names:
+    print(f'Error: pack \"{pack_arg}\" not found.', file=sys.stderr)
+    print(f'Available packs: {\", \".join(names)}', file=sys.stderr)
+    sys.exit(1)
+try:
+    cfg = json.load(open(config_path))
+except:
+    cfg = {}
+cfg['active_pack'] = pack_arg
+json.dump(cfg, open(config_path, 'w'), indent=2)
+mpath = os.path.join(packs_dir, pack_arg, 'manifest.json')
+display = json.load(open(mpath)).get('display_name', pack_arg)
+print(f'peon-ping: switched to {pack_arg} ({display})')
+" || exit 1
+    fi
+    exit 0 ;;
   --help|-h)
-    echo "Usage: peon --pause | --resume | --toggle | --status"; exit 0 ;;
+    cat <<'HELPEOF'
+Usage: peon <command>
+
+Commands:
+  --pause        Mute sounds
+  --resume       Unmute sounds
+  --toggle       Toggle mute on/off
+  --status       Check if paused or active
+  --packs        List available sound packs
+  --pack <name>  Switch to a specific pack
+  --pack         Cycle to the next pack
+  --help         Show this help
+HELPEOF
+    exit 0 ;;
   --*)
     echo "Unknown option: $1" >&2
-    echo "Usage: peon --pause | --resume | --toggle | --status" >&2; exit 1 ;;
+    echo "Run 'peon --help' for usage." >&2; exit 1 ;;
 esac
 
 INPUT=$(cat)

@@ -324,3 +324,106 @@ JSON
   [ "$PEON_EXIT" -eq 0 ]
   ! afplay_was_called
 }
+
+# ============================================================
+# --packs (list packs)
+# ============================================================
+
+@test "--packs lists all available packs" {
+  run bash "$PEON_SH" --packs
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"peon"* ]]
+  [[ "$output" == *"sc_kerrigan"* ]]
+}
+
+@test "--packs marks the active pack with *" {
+  run bash "$PEON_SH" --packs
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Orc Peon *"* ]]
+  # sc_kerrigan should NOT be marked
+  line=$(echo "$output" | grep "sc_kerrigan")
+  [[ "$line" != *"*"* ]]
+}
+
+@test "--packs marks correct pack after switch" {
+  bash "$PEON_SH" --pack sc_kerrigan
+  run bash "$PEON_SH" --packs
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Sarah Kerrigan (StarCraft) *"* ]]
+}
+
+# ============================================================
+# --pack <name> (set specific pack)
+# ============================================================
+
+@test "--pack <name> switches to valid pack" {
+  run bash "$PEON_SH" --pack sc_kerrigan
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"switched to sc_kerrigan"* ]]
+  [[ "$output" == *"Sarah Kerrigan"* ]]
+  # Verify config was updated
+  active=$(/usr/bin/python3 -c "import json; print(json.load(open('$TEST_DIR/config.json'))['active_pack'])")
+  [ "$active" = "sc_kerrigan" ]
+}
+
+@test "--pack <name> preserves other config fields" {
+  bash "$PEON_SH" --pack sc_kerrigan
+  volume=$(/usr/bin/python3 -c "import json; print(json.load(open('$TEST_DIR/config.json'))['volume'])")
+  [ "$volume" = "0.5" ]
+}
+
+@test "--pack <name> errors on nonexistent pack" {
+  run bash "$PEON_SH" --pack nonexistent
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"not found"* ]]
+  [[ "$output" == *"Available packs"* ]]
+}
+
+@test "--pack <name> does not modify config on invalid pack" {
+  bash "$PEON_SH" --pack nonexistent || true
+  active=$(/usr/bin/python3 -c "import json; print(json.load(open('$TEST_DIR/config.json'))['active_pack'])")
+  [ "$active" = "peon" ]
+}
+
+# ============================================================
+# --pack (cycle, no argument)
+# ============================================================
+
+@test "--pack cycles to next pack alphabetically" {
+  # Active is peon, next alphabetically is sc_kerrigan
+  run bash "$PEON_SH" --pack
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"switched to sc_kerrigan"* ]]
+}
+
+@test "--pack cycle wraps around from last to first" {
+  # Set to sc_kerrigan (last alphabetically), should wrap to peon
+  bash "$PEON_SH" --pack sc_kerrigan
+  run bash "$PEON_SH" --pack
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"switched to peon"* ]]
+}
+
+@test "--pack cycle updates config correctly" {
+  bash "$PEON_SH" --pack
+  active=$(/usr/bin/python3 -c "import json; print(json.load(open('$TEST_DIR/config.json'))['active_pack'])")
+  [ "$active" = "sc_kerrigan" ]
+}
+
+# ============================================================
+# --help (updated)
+# ============================================================
+
+@test "--help shows pack commands" {
+  run bash "$PEON_SH" --help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--packs"* ]]
+  [[ "$output" == *"--pack"* ]]
+}
+
+@test "unknown option shows helpful error" {
+  run bash "$PEON_SH" --foobar
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Unknown option"* ]]
+  [[ "$output" == *"peon --help"* ]]
+}

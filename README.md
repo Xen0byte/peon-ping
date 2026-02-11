@@ -41,10 +41,15 @@ Need to mute sounds and notifications during a meeting or pairing session? Two o
 Other CLI commands:
 
 ```bash
-peon --pause    # Mute sounds
-peon --resume   # Unmute sounds
-peon --status   # Check if paused or active
+peon --pause          # Mute sounds
+peon --resume         # Unmute sounds
+peon --status         # Check if paused or active
+peon --packs          # List available sound packs
+peon --pack <name>    # Switch to a specific pack
+peon --pack           # Cycle to the next pack
 ```
+
+Tab completion is supported — type `peon --pack <TAB>` to see available pack names.
 
 Pausing mutes sounds and desktop notifications instantly. Persists across sessions until you resume. Tab titles remain active when paused.
 
@@ -83,7 +88,15 @@ Edit `~/.claude/hooks/peon-ping/config.json`:
 | `sc_battlecruiser` | Battlecruiser (StarCraft) | "Battlecruiser operational", "Make it happen", "Engage" | [@garysheng](https://github.com/garysheng) |
 | `sc_kerrigan` | Sarah Kerrigan (StarCraft) | "I gotcha", "What now?", "Easily amused, huh?" | [@garysheng](https://github.com/garysheng) |
 
-Switch packs in `~/.claude/hooks/peon-ping/config.json`:
+Switch packs from the CLI:
+
+```bash
+peon --pack ra2_soviet_engineer   # switch to a specific pack
+peon --pack                       # cycle to the next pack
+peon --packs                      # list all packs
+```
+
+Or edit `~/.claude/hooks/peon-ping/config.json` directly:
 
 ```json
 { "active_pack": "ra2_soviet_engineer" }

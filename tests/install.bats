@@ -15,6 +15,7 @@ setup() {
   cp "$(dirname "$BATS_TEST_FILENAME")/../peon.sh" "$CLONE_DIR/"
   cp "$(dirname "$BATS_TEST_FILENAME")/../config.json" "$CLONE_DIR/"
   cp "$(dirname "$BATS_TEST_FILENAME")/../VERSION" "$CLONE_DIR/"
+  cp "$(dirname "$BATS_TEST_FILENAME")/../completions.bash" "$CLONE_DIR/"
   cp "$(dirname "$BATS_TEST_FILENAME")/../uninstall.sh" "$CLONE_DIR/" 2>/dev/null || touch "$CLONE_DIR/uninstall.sh"
   cp -r "$(dirname "$BATS_TEST_FILENAME")/../packs" "$CLONE_DIR/"
 
@@ -85,4 +86,15 @@ print('OK')
 @test "peon.sh is executable after install" {
   bash "$CLONE_DIR/install.sh"
   [ -x "$INSTALL_DIR/peon.sh" ]
+}
+
+@test "fresh install copies completions.bash" {
+  bash "$CLONE_DIR/install.sh"
+  [ -f "$INSTALL_DIR/completions.bash" ]
+}
+
+@test "fresh install adds completions source to shell rc" {
+  touch "$TEST_HOME/.zshrc"
+  bash "$CLONE_DIR/install.sh"
+  grep -qF 'peon-ping/completions.bash' "$TEST_HOME/.zshrc"
 }

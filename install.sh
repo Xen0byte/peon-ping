@@ -65,6 +65,7 @@ if [ -n "$SCRIPT_DIR" ]; then
   # Local clone — copy files directly (including sounds)
   cp -r "$SCRIPT_DIR/packs/"* "$INSTALL_DIR/packs/"
   cp "$SCRIPT_DIR/peon.sh" "$INSTALL_DIR/"
+  cp "$SCRIPT_DIR/completions.bash" "$INSTALL_DIR/"
   cp "$SCRIPT_DIR/VERSION" "$INSTALL_DIR/"
   if [ "$UPDATING" = false ]; then
     cp "$SCRIPT_DIR/config.json" "$INSTALL_DIR/"
@@ -73,6 +74,7 @@ else
   # curl|bash — download from GitHub (sounds are version-controlled in repo)
   echo "Downloading from GitHub..."
   curl -fsSL "$REPO_BASE/peon.sh" -o "$INSTALL_DIR/peon.sh"
+  curl -fsSL "$REPO_BASE/completions.bash" -o "$INSTALL_DIR/completions.bash"
   curl -fsSL "$REPO_BASE/VERSION" -o "$INSTALL_DIR/VERSION"
   curl -fsSL "$REPO_BASE/uninstall.sh" -o "$INSTALL_DIR/uninstall.sh"
   for pack in $PACKS; do
@@ -122,6 +124,15 @@ for rcfile in "$HOME/.zshrc" "$HOME/.bashrc"; do
     echo "# peon-ping quick controls" >> "$rcfile"
     echo "$ALIAS_LINE" >> "$rcfile"
     echo "Added peon alias to $(basename "$rcfile")"
+  fi
+done
+
+# --- Add tab completion ---
+COMPLETION_LINE='[ -f ~/.claude/hooks/peon-ping/completions.bash ] && source ~/.claude/hooks/peon-ping/completions.bash'
+for rcfile in "$HOME/.zshrc" "$HOME/.bashrc"; do
+  if [ -f "$rcfile" ] && ! grep -qF 'peon-ping/completions.bash' "$rcfile"; then
+    echo "$COMPLETION_LINE" >> "$rcfile"
+    echo "Added tab completion to $(basename "$rcfile")"
   fi
 done
 
