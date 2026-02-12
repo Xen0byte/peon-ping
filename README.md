@@ -18,6 +18,14 @@ curl -fsSL https://raw.githubusercontent.com/tonyyont/peon-ping/main/install.sh 
 
 One command. Takes 10 seconds. macOS and WSL2 (Windows). Re-run to update (sounds and config preserved).
 
+**Project-local install** — installs into `.claude/` in the current project instead of `~/.claude/`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tonyyont/peon-ping/main/install.sh | bash -s -- --local
+```
+
+Local installs don't add the `peon` CLI alias or shell completions — use `/peon-ping-toggle` inside Claude Code instead.
+
 ## What you'll hear
 
 | Event | Sound | Examples |
@@ -108,7 +116,8 @@ Want to add your own pack? See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## Uninstall
 
 ```bash
-bash ~/.claude/hooks/peon-ping/uninstall.sh
+bash ~/.claude/hooks/peon-ping/uninstall.sh        # global
+bash .claude/hooks/peon-ping/uninstall.sh           # project-local
 ```
 
 ## Requirements

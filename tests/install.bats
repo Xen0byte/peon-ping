@@ -18,12 +18,18 @@ setup() {
   cp "$(dirname "$BATS_TEST_FILENAME")/../completions.bash" "$CLONE_DIR/"
   cp "$(dirname "$BATS_TEST_FILENAME")/../uninstall.sh" "$CLONE_DIR/" 2>/dev/null || touch "$CLONE_DIR/uninstall.sh"
   cp -r "$(dirname "$BATS_TEST_FILENAME")/../packs" "$CLONE_DIR/"
+  cp -r "$(dirname "$BATS_TEST_FILENAME")/../skills" "$CLONE_DIR/" 2>/dev/null || true
 
   INSTALL_DIR="$TEST_HOME/.claude/hooks/peon-ping"
+
+  # For --local tests: a fake project directory with .claude
+  PROJECT_DIR="$(mktemp -d)"
+  mkdir -p "$PROJECT_DIR/.claude"
+  LOCAL_INSTALL_DIR="$PROJECT_DIR/.claude/hooks/peon-ping"
 }
 
 teardown() {
-  rm -rf "$TEST_HOME" "$CLONE_DIR"
+  rm -rf "$TEST_HOME" "$CLONE_DIR" "$PROJECT_DIR"
 }
 
 @test "fresh install creates all expected files" {
@@ -97,4 +103,80 @@ print('OK')
   touch "$TEST_HOME/.zshrc"
   bash "$CLONE_DIR/install.sh"
   grep -qF 'peon-ping/completions.bash' "$TEST_HOME/.zshrc"
+}
+
+# --- --local mode tests ---
+
+@test "--local installs into project .claude directory" {
+  cd "$PROJECT_DIR"
+  bash "$CLONE_DIR/install.sh" --local
+  [ -f "$LOCAL_INSTALL_DIR/peon.sh" ]
+  [ -f "$LOCAL_INSTALL_DIR/config.json" ]
+  [ -f "$LOCAL_INSTALL_DIR/VERSION" ]
+  [ -f "$LOCAL_INSTALL_DIR/.state.json" ]
+  [ -f "$LOCAL_INSTALL_DIR/packs/peon/manifest.json" ]
+}
+
+@test "--local registers hooks in project settings.json" {
+  cd "$PROJECT_DIR"
+  bash "$CLONE_DIR/install.sh" --local
+  [ -f "$PROJECT_DIR/.claude/settings.json" ]
+  /usr/bin/python3 -c "
+import json
+s = json.load(open('$PROJECT_DIR/.claude/settings.json'))
+hooks = s.get('hooks', {})
+for event in ['SessionStart', 'UserPromptSubmit', 'Stop', 'Notification', 'PermissionRequest']:
+    assert event in hooks, f'{event} not in hooks'
+    found = any('peon.sh' in h.get('command','') for entry in hooks[event] for h in entry.get('hooks',[]))
+    assert found, f'peon.sh not registered for {event}'
+# Verify relative path (not absolute)
+cmd = hooks['SessionStart'][0]['hooks'][0]['command']
+assert cmd == '.claude/hooks/peon-ping/peon.sh', f'Expected relative path, got: {cmd}'
+print('OK')
+"
+}
+
+@test "--local does not modify shell rc files" {
+  touch "$TEST_HOME/.zshrc"
+  touch "$TEST_HOME/.bashrc"
+  cd "$PROJECT_DIR"
+  bash "$CLONE_DIR/install.sh" --local
+  ! grep -qF 'alias peon=' "$TEST_HOME/.zshrc"
+  ! grep -qF 'alias peon=' "$TEST_HOME/.bashrc"
+  ! grep -qF 'peon-ping/completions.bash' "$TEST_HOME/.zshrc"
+}
+
+@test "--local uninstall removes hooks and files" {
+  cd "$PROJECT_DIR"
+  bash "$CLONE_DIR/install.sh" --local
+  [ -f "$LOCAL_INSTALL_DIR/peon.sh" ]
+  [ -f "$PROJECT_DIR/.claude/settings.json" ]
+  [ -d "$PROJECT_DIR/.claude/skills/peon-ping-toggle" ]
+
+  # Run uninstall (non-interactive — no notify.sh restore prompt for local)
+  bash "$LOCAL_INSTALL_DIR/uninstall.sh"
+
+  # Hook entries removed from settings.json
+  /usr/bin/python3 -c "
+import json
+s = json.load(open('$PROJECT_DIR/.claude/settings.json'))
+hooks = s.get('hooks', {})
+for event, entries in hooks.items():
+    for entry in entries:
+        for h in entry.get('hooks', []):
+            assert 'peon.sh' not in h.get('command', ''), f'peon.sh still in {event}'
+print('OK')
+"
+  # Install and skill directories removed
+  [ ! -d "$LOCAL_INSTALL_DIR" ]
+  [ ! -d "$PROJECT_DIR/.claude/skills/peon-ping-toggle" ]
+}
+
+@test "--local fails without .claude directory" {
+  NO_CLAUDE_DIR="$(mktemp -d)"
+  cd "$NO_CLAUDE_DIR"
+  run bash "$CLONE_DIR/install.sh" --local
+  [ "$status" -ne 0 ]
+  [[ "$output" == *".claude/ not found"* ]]
+  rm -rf "$NO_CLAUDE_DIR"
 }

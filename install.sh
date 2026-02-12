@@ -4,8 +4,20 @@
 # Re-running updates core files; sounds are version-controlled in the repo
 set -euo pipefail
 
-INSTALL_DIR="$HOME/.claude/hooks/peon-ping"
-SETTINGS="$HOME/.claude/settings.json"
+LOCAL_MODE=false
+for arg in "$@"; do
+  case "$arg" in
+    --local) LOCAL_MODE=true ;;
+  esac
+done
+
+if [ "$LOCAL_MODE" = true ]; then
+  BASE_DIR="$PWD/.claude"
+else
+  BASE_DIR="$HOME/.claude"
+fi
+INSTALL_DIR="$BASE_DIR/hooks/peon-ping"
+SETTINGS="$BASE_DIR/settings.json"
 REPO_BASE="https://raw.githubusercontent.com/tonyyont/peon-ping/main"
 
 # All available sound packs (add new packs here)
@@ -68,8 +80,12 @@ elif [ "$PLATFORM" = "wsl" ]; then
   fi
 fi
 
-if [ ! -d "$HOME/.claude" ]; then
-  echo "Error: ~/.claude/ not found. Is Claude Code installed?"
+if [ ! -d "$BASE_DIR" ]; then
+  if [ "$LOCAL_MODE" = true ]; then
+    echo "Error: .claude/ not found in current directory. Is this a Claude Code project?"
+  else
+    echo "Error: ~/.claude/ not found. Is Claude Code installed?"
+  fi
   exit 1
 fi
 
@@ -133,35 +149,50 @@ fi
 chmod +x "$INSTALL_DIR/peon.sh"
 
 # --- Install skill (slash command) ---
-SKILL_DIR="$HOME/.claude/skills/peon-ping-toggle"
+SKILL_DIR="$BASE_DIR/skills/peon-ping-toggle"
 mkdir -p "$SKILL_DIR"
+if [ "$LOCAL_MODE" = true ]; then
+  SKILL_HOOK_CMD="bash .claude/hooks/peon-ping/peon.sh"
+else
+  SKILL_HOOK_CMD="bash ~/.claude/hooks/peon-ping/peon.sh"
+fi
 if [ -n "$SCRIPT_DIR" ] && [ -d "$SCRIPT_DIR/skills/peon-ping-toggle" ]; then
   cp "$SCRIPT_DIR/skills/peon-ping-toggle/SKILL.md" "$SKILL_DIR/"
+  if [ "$LOCAL_MODE" = true ]; then
+    sed -i.bak 's|bash ~/.claude/hooks/peon-ping/peon.sh|'"$SKILL_HOOK_CMD"'|g' "$SKILL_DIR/SKILL.md"
+    rm -f "$SKILL_DIR/SKILL.md.bak"
+  fi
 elif [ -z "$SCRIPT_DIR" ]; then
   curl -fsSL "$REPO_BASE/skills/peon-ping-toggle/SKILL.md" -o "$SKILL_DIR/SKILL.md"
+  if [ "$LOCAL_MODE" = true ]; then
+    sed -i.bak 's|bash ~/.claude/hooks/peon-ping/peon.sh|'"$SKILL_HOOK_CMD"'|g' "$SKILL_DIR/SKILL.md"
+    rm -f "$SKILL_DIR/SKILL.md.bak"
+  fi
 else
   echo "Warning: skills/peon-ping-toggle not found in local clone, skipping skill install"
 fi
 
-# --- Add shell alias ---
-ALIAS_LINE='alias peon="bash ~/.claude/hooks/peon-ping/peon.sh"'
-for rcfile in "$HOME/.zshrc" "$HOME/.bashrc"; do
-  if [ -f "$rcfile" ] && ! grep -qF 'alias peon=' "$rcfile"; then
-    echo "" >> "$rcfile"
-    echo "# peon-ping quick controls" >> "$rcfile"
-    echo "$ALIAS_LINE" >> "$rcfile"
-    echo "Added peon alias to $(basename "$rcfile")"
-  fi
-done
+# --- Add shell alias (global install only) ---
+if [ "$LOCAL_MODE" = false ]; then
+  ALIAS_LINE='alias peon="bash ~/.claude/hooks/peon-ping/peon.sh"'
+  for rcfile in "$HOME/.zshrc" "$HOME/.bashrc"; do
+    if [ -f "$rcfile" ] && ! grep -qF 'alias peon=' "$rcfile"; then
+      echo "" >> "$rcfile"
+      echo "# peon-ping quick controls" >> "$rcfile"
+      echo "$ALIAS_LINE" >> "$rcfile"
+      echo "Added peon alias to $(basename "$rcfile")"
+    fi
+  done
 
-# --- Add tab completion ---
-COMPLETION_LINE='[ -f ~/.claude/hooks/peon-ping/completions.bash ] && source ~/.claude/hooks/peon-ping/completions.bash'
-for rcfile in "$HOME/.zshrc" "$HOME/.bashrc"; do
-  if [ -f "$rcfile" ] && ! grep -qF 'peon-ping/completions.bash' "$rcfile"; then
-    echo "$COMPLETION_LINE" >> "$rcfile"
-    echo "Added tab completion to $(basename "$rcfile")"
-  fi
-done
+  # --- Add tab completion ---
+  COMPLETION_LINE='[ -f ~/.claude/hooks/peon-ping/completions.bash ] && source ~/.claude/hooks/peon-ping/completions.bash'
+  for rcfile in "$HOME/.zshrc" "$HOME/.bashrc"; do
+    if [ -f "$rcfile" ] && ! grep -qF 'peon-ping/completions.bash' "$rcfile"; then
+      echo "$COMPLETION_LINE" >> "$rcfile"
+      echo "Added tab completion to $(basename "$rcfile")"
+    fi
+  done
+fi
 
 # --- Verify sounds are installed ---
 echo ""
@@ -175,8 +206,8 @@ for pack in $PACKS; do
   fi
 done
 
-# --- Backup existing notify.sh (fresh install only) ---
-if [ "$UPDATING" = false ]; then
+# --- Backup existing notify.sh (global fresh install only) ---
+if [ "$LOCAL_MODE" = false ] && [ "$UPDATING" = false ]; then
   NOTIFY_SH="$HOME/.claude/hooks/notify.sh"
   if [ -f "$NOTIFY_SH" ]; then
     cp "$NOTIFY_SH" "$NOTIFY_SH.backup"
@@ -189,11 +220,17 @@ fi
 echo ""
 echo "Updating Claude Code hooks in settings.json..."
 
+if [ "$LOCAL_MODE" = true ]; then
+  HOOK_CMD=".claude/hooks/peon-ping/peon.sh"
+else
+  HOOK_CMD="$HOME/.claude/hooks/peon-ping/peon.sh"
+fi
+
 python3 -c "
 import json, os, sys
 
-settings_path = os.path.expanduser('~/.claude/settings.json')
-hook_cmd = os.path.expanduser('~/.claude/hooks/peon-ping/peon.sh')
+settings_path = '$SETTINGS'
+hook_cmd = '$HOOK_CMD'
 
 # Load existing settings
 if os.path.exists(settings_path):
@@ -249,9 +286,9 @@ fi
 echo ""
 echo "Testing sound..."
 ACTIVE_PACK=$(python3 -c "
-import json, os
+import json
 try:
-    c = json.load(open(os.path.expanduser('~/.claude/hooks/peon-ping/config.json')))
+    c = json.load(open('$INSTALL_DIR/config.json'))
     print(c.get('active_pack', 'peon'))
 except:
     print('peon')
@@ -298,7 +335,9 @@ fi
 echo ""
 echo "Quick controls:"
 echo "  /peon-ping-toggle  — toggle sounds in Claude Code"
-echo "  peon --toggle      — toggle sounds from any terminal"
-echo "  peon --status      — check if sounds are paused"
+if [ "$LOCAL_MODE" = false ]; then
+  echo "  peon --toggle      — toggle sounds from any terminal"
+  echo "  peon --status      — check if sounds are paused"
+fi
 echo ""
 echo "Ready to work!"
