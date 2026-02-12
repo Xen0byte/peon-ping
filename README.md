@@ -1,6 +1,6 @@
 # peon-ping
 
-![macOS](https://img.shields.io/badge/macOS-blue) ![WSL2](https://img.shields.io/badge/WSL2-blue)
+![macOS](https://img.shields.io/badge/macOS-blue) ![WSL2](https://img.shields.io/badge/WSL2-blue) ![Linux](https://img.shields.io/badge/Linux-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Claude Code](https://img.shields.io/badge/Claude_Code-hook-ffab01)
 
@@ -16,7 +16,15 @@ Claude Code doesn't notify you when it finishes or needs permission. You tab awa
 curl -fsSL https://raw.githubusercontent.com/tonyyont/peon-ping/main/install.sh | bash
 ```
 
-One command. Takes 10 seconds. macOS and WSL2 (Windows). Re-run to update (sounds and config preserved).
+One command. Takes 10 seconds. macOS, WSL2 (Windows), and Linux. Re-run to update (sounds and config preserved).
+
+**Project-local install** — installs into `.claude/` in the current project instead of `~/.claude/`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tonyyont/peon-ping/main/install.sh | bash -s -- --local
+```
+
+Local installs don't add the `peon` CLI alias or shell completions — use `/peon-ping-toggle` inside Claude Code instead.
 
 ## What you'll hear
 
@@ -86,8 +94,19 @@ Edit `~/.claude/hooks/peon-ping/config.json`:
 | `peasant` | Human Peasant (Warcraft III) | "Yes, milord?", "Job's done!", "Ready, sir." | [@thomasKn](https://github.com/thomasKn) |
 | `peasant_fr` | Human Peasant (Warcraft III, French) | "Oui, monseigneur?", "C'est fait!", "Prêt, monsieur." | [@thomasKn](https://github.com/thomasKn) |
 | `ra2_soviet_engineer` | Soviet Engineer (Red Alert 2) | "Tools ready", "Yes, commander", "Engineering" | [@msukkari](https://github.com/msukkari) |
+| `peon_ru` | Orc Peon (Warcraft III, Russian) | "Готов вкалывать!", "Работа, работа.", "Оки-доки." | [@maksimfedin](https://github.com/maksimfedin) |
+| `peasant_ru` | Human Peasant (Warcraft III, Russian) | "Да, господин?", "Готово.", "Ну, я пошёл!" | [@maksimfedin](https://github.com/maksimfedin) |
+| `acolyte_ru` | Undead Acolyte (Warcraft III, Russian) | "Моя жизнь за Нер'зула!", "Да, повелитель.", "Тени служат мне." | [@maksimfedin](https://github.com/maksimfedin) |
+| `tf2_engineer` | Engineer (Team Fortress 2) | "Sentry going up.", "Nice work!", "Cowboy up!" | [@Arie](https://github.com/Arie) |
 | `sc_battlecruiser` | Battlecruiser (StarCraft) | "Battlecruiser operational", "Make it happen", "Engage" | [@garysheng](https://github.com/garysheng) |
 | `sc_kerrigan` | Sarah Kerrigan (StarCraft) | "I gotcha", "What now?", "Easily amused, huh?" | [@garysheng](https://github.com/garysheng) |
+| `glados` | GLaDOS (Portal) | "Oh, it's you.", "You monster.", "Your entire team is dead." | [@DoubleGremlin181](https://github.com/DoubleGremlin181) |
+| `sc_terran` | Terran Units Mixed (StarCraft) | SCV, Firebat, Medic, Siege Tank, Science Vessel | [@workdd](https://github.com/workdd) |
+| `sc_scv` | SCV (StarCraft) | "Good to go, sir", "Affirmative", "I read you" | [@workdd](https://github.com/workdd) |
+| `sc_firebat` | Firebat (StarCraft) | "Need a light?", "Ready to roast!", "Fueled up!" | [@workdd](https://github.com/workdd) |
+| `sc_medic` | Medic (StarCraft) | "The doctor is in", "Where does it hurt?", "All patched up!" | [@workdd](https://github.com/workdd) |
+| `sc_tank` | Siege Tank (StarCraft) | "Ready to roll out", "Absolutely", "Done and done" | [@workdd](https://github.com/workdd) |
+| `sc_vessel` | Science Vessel (StarCraft) | "Explorer reporting", "Receiving", "Affirmative" | [@workdd](https://github.com/workdd) |
 
 Switch packs from the CLI:
 
@@ -108,18 +127,19 @@ Want to add your own pack? See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## Uninstall
 
 ```bash
-bash ~/.claude/hooks/peon-ping/uninstall.sh
+bash ~/.claude/hooks/peon-ping/uninstall.sh        # global
+bash .claude/hooks/peon-ping/uninstall.sh           # project-local
 ```
 
 ## Requirements
 
-- macOS (uses `afplay` and AppleScript) or WSL2 (uses PowerShell `MediaPlayer` and WinForms)
+- macOS (uses `afplay` and AppleScript), WSL2 (uses PowerShell `MediaPlayer` and WinForms), or Linux (uses `pw-play`/`paplay`/`ffplay`/`mpv`/`aplay` and `notify-send`)
 - Claude Code with hooks support
 - python3
 
 ## How it works
 
-`peon.sh` is a Claude Code hook registered for `SessionStart`, `UserPromptSubmit`, `Stop`, and `Notification` events. On each event it maps to a sound category, picks a random voice line (avoiding repeats), plays it via `afplay` (macOS) or PowerShell `MediaPlayer` (WSL2), and updates your Terminal tab title.
+`peon.sh` is a Claude Code hook registered for `SessionStart`, `UserPromptSubmit`, `Stop`, and `Notification` events. On each event it maps to a sound category, picks a random voice line (avoiding repeats), plays it via `afplay` (macOS), PowerShell `MediaPlayer` (WSL2), or `paplay`/`ffplay`/`mpv`/`aplay` (Linux), and updates your Terminal tab title.
 
 Sound files are property of their respective publishers (Blizzard Entertainment, EA) and are included in the repo for convenience.
 

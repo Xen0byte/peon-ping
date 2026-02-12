@@ -16,11 +16,109 @@ detect_platform() {
     *) echo "unknown" ;;
   esac
 }
-PLATFORM=$(detect_platform)
+PLATFORM=${PLATFORM:-$(detect_platform)}
 
-PEON_DIR="${CLAUDE_PEON_DIR:-$HOME/.claude/hooks/peon-ping}"
+PEON_DIR="${CLAUDE_PEON_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 CONFIG="$PEON_DIR/config.json"
 STATE="$PEON_DIR/.state.json"
+
+# --- Linux audio backend detection ---
+detect_linux_player() {
+  # Helper to check if a player is available (respects test-mode disable markers)
+  player_available() {
+    local cmd="$1"
+    command -v "$cmd" &>/dev/null || return 1
+    # In test mode, check for disable marker
+    [ "${PEON_TEST:-0}" = "1" ] && [ -f "${CLAUDE_PEON_DIR}/.disabled_${cmd}" ] && return 1
+    return 0
+  }
+
+  if player_available pw-play; then
+    echo "pw-play"
+  elif player_available paplay; then
+    echo "paplay"
+  elif player_available ffplay; then
+    echo "ffplay"
+  elif player_available mpv; then
+    echo "mpv"
+  elif player_available play; then
+    echo "play"
+  elif player_available aplay; then
+    echo "aplay"
+  else
+    # Warn only once per process to avoid spam
+    if [ -z "${WARNED_NO_LINUX_AUDIO_BACKEND:-}" ]; then
+      echo "WARNING: No audio backend found. Please install one of: pw-play, paplay, ffplay, mpv, play (SoX), or aplay" >&2
+      WARNED_NO_LINUX_AUDIO_BACKEND=1
+    fi
+    return 1
+  fi
+}
+
+# --- Linux audio playback with backend-specific volume handling ---
+play_linux_sound() {
+  local file="$1" vol="$2" player="$3"
+
+  # Skip playback if no backend available
+  [ -z "$player" ] && return 0
+
+  # Background mode: use nohup & for async playback (default)
+  # Synchronous mode: no nohup/& for tests (when PEON_TEST=1)
+  local use_bg=true
+  [ "${PEON_TEST:-0}" = "1" ] && use_bg=false
+
+  case "$player" in
+    pw-play)
+      # pw-play (PipeWire) expects volume as float 0.0-1.0 (unlike paplay 0-65536, ffplay/mpv 0-100)
+      if [ "$use_bg" = true ]; then
+        nohup pw-play --volume "$vol" "$file" >/dev/null 2>&1 &
+      else
+        pw-play --volume "$vol" "$file" >/dev/null 2>&1
+      fi
+      ;;
+    paplay)
+      local pa_vol
+      pa_vol=$(python3 -c "print(max(0, min(65536, int($vol * 65536))))")
+      if [ "$use_bg" = true ]; then
+        nohup paplay --volume="$pa_vol" "$file" >/dev/null 2>&1 &
+      else
+        paplay --volume="$pa_vol" "$file" >/dev/null 2>&1
+      fi
+      ;;
+    ffplay)
+      local ff_vol
+      ff_vol=$(python3 -c "print(max(0, min(100, int($vol * 100))))")
+      if [ "$use_bg" = true ]; then
+        nohup ffplay -nodisp -autoexit -volume "$ff_vol" "$file" >/dev/null 2>&1 &
+      else
+        ffplay -nodisp -autoexit -volume "$ff_vol" "$file" >/dev/null 2>&1
+      fi
+      ;;
+    mpv)
+      local mpv_vol
+      mpv_vol=$(python3 -c "print(max(0, min(100, int($vol * 100))))")
+      if [ "$use_bg" = true ]; then
+        nohup mpv --no-video --volume="$mpv_vol" "$file" >/dev/null 2>&1 &
+      else
+        mpv --no-video --volume="$mpv_vol" "$file" >/dev/null 2>&1
+      fi
+      ;;
+    play)
+      if [ "$use_bg" = true ]; then
+        nohup play -v "$vol" "$file" >/dev/null 2>&1 &
+      else
+        play -v "$vol" "$file" >/dev/null 2>&1
+      fi
+      ;;
+    aplay)
+      if [ "$use_bg" = true ]; then
+        nohup aplay -q "$file" >/dev/null 2>&1 &
+      else
+        aplay -q "$file" >/dev/null 2>&1
+      fi
+      ;;
+  esac
+}
 
 # --- Platform-aware audio playback ---
 play_sound() {
@@ -45,6 +143,13 @@ play_sound() {
         \$p.Close()
       " &>/dev/null &
       ;;
+    linux)
+      local player
+      player=$(detect_linux_player) || player=""
+      if [ -n "$player" ]; then
+        play_linux_sound "$file" "$vol" "$player"
+      fi
+      ;;
   esac
 }
 
@@ -54,11 +159,26 @@ send_notification() {
   local msg="$1" title="$2" color="${3:-red}"
   case "$PLATFORM" in
     mac)
-      nohup osascript - "$msg" "$title" >/dev/null 2>&1 <<'APPLESCRIPT' &
+      # Use terminal-native escape sequences where supported (shows terminal icon).
+      # Falls back to osascript which attributes notifications to Script Editor.
+      case "${TERM_PROGRAM:-}" in
+        iTerm.app)
+          # iTerm2 OSC 9 — notification with iTerm2 icon
+          printf '\e]9;%s\007' "$title: $msg" 2>/dev/null
+          ;;
+        kitty)
+          # Kitty OSC 99
+          printf '\e]99;i=peon:d=0;%s\e\\' "$title: $msg" 2>/dev/null
+          ;;
+        *)
+          # Terminal.app, Warp, Ghostty, etc. — no native escape; use osascript
+          nohup osascript - "$msg" "$title" >/dev/null 2>&1 <<'APPLESCRIPT' &
 on run argv
   display notification (item 1 of argv) with title (item 2 of argv)
 end run
 APPLESCRIPT
+          ;;
+      esac
       ;;
     wsl)
       # Map color name to RGB
@@ -107,6 +227,15 @@ APPLESCRIPT
         rm -rf "$slot_dir/slot-$slot"
       ) &
       ;;
+    linux)
+      if command -v notify-send &>/dev/null; then
+        local urgency="normal"
+        case "$color" in
+          red) urgency="critical" ;;
+        esac
+        nohup notify-send --urgency="$urgency" "$title" "$msg" >/dev/null 2>&1 &
+      fi
+      ;;
   esac
 }
 
@@ -123,6 +252,17 @@ terminal_is_focused() {
       ;;
     wsl)
       # Checking Windows focus from WSL adds too much latency; always notify
+      return 1
+      ;;
+    linux)
+      # Only use xdotool on X11; fallback to always notify on Wayland or if xdotool is missing
+      if [ "${XDG_SESSION_TYPE:-}" = "x11" ] && command -v xdotool &>/dev/null; then
+        local win_name
+        win_name=$(xdotool getactivewindow getwindowname 2>/dev/null || echo "")
+        if [[ "$win_name" =~ (terminal|konsole|alacritty|kitty|wezterm|foot|tilix|gnome-terminal|xterm|xfce4-terminal|sakura|terminator|st|urxvt|ghostty) ]]; then
+          return 0
+        fi
+      fi
       return 1
       ;;
     *)
