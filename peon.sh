@@ -309,13 +309,19 @@ elif session_id in agent_sessions:
     print('PEON_EXIT=true')
     sys.exit(0)
 
-# --- Pack rotation: pin a random pack per session ---
+# --- Pack rotation: pin a pack per session ---
 if pack_rotation:
     session_packs = state.get('session_packs', {})
     if session_id in session_packs and session_packs[session_id] in pack_rotation:
         active_pack = session_packs[session_id]
     else:
-        active_pack = random.choice(pack_rotation)
+        rotation_mode = cfg.get('pack_rotation_mode', 'random')
+        if rotation_mode == 'round-robin':
+            rotation_index = state.get('rotation_index', 0) % len(pack_rotation)
+            active_pack = pack_rotation[rotation_index]
+            state['rotation_index'] = rotation_index + 1
+        else:
+            active_pack = random.choice(pack_rotation)
         session_packs[session_id] = active_pack
         state['session_packs'] = session_packs
         state_dirty = True
