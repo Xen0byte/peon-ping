@@ -449,8 +449,9 @@ print('MOBILE_BOT_TOKEN=' + q(mn.get('bot_token', '')))
     telegram)
       [ -z "$MOBILE_BOT_TOKEN" ] || [ -z "$MOBILE_CHAT_ID" ] && return 0
       local tg_text="${title}%0A${msg}"
-      nohup curl -sf \
-        "https://api.telegram.org/bot${MOBILE_BOT_TOKEN}/sendMessage?chat_id=${MOBILE_CHAT_ID}&text=${tg_text}" >/dev/null 2>&1 &
+      nohup curl -sf "https://api.telegram.org/bot$MOBILE_BOT_TOKEN/sendMessage" \
+        -d "chat_id=$MOBILE_CHAT_ID" \
+        -d "text=${tg_text}" >/dev/null 2>&1 &
       ;;
   esac
 }
