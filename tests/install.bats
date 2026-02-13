@@ -204,14 +204,28 @@ print('OK')
   ! grep -qF 'peon-ping/completions.bash' "$TEST_HOME/.zshrc"
 }
 
-@test "--local uninstall removes install directory and skills" {
+@test "--local uninstall removes hooks and files" {
   cd "$PROJECT_DIR"
   bash "$CLONE_DIR/install.sh" --local
   [ -f "$LOCAL_INSTALL_DIR/peon.sh" ]
+  # Hooks are in global settings
+  [ -f "$TEST_HOME/.claude/settings.json" ]
+  [ -d "$PROJECT_DIR/.claude/skills/peon-ping-toggle" ]
 
   # Run uninstall (non-interactive — no notify.sh restore prompt for local)
   bash "$LOCAL_INSTALL_DIR/uninstall.sh"
 
+  # Hook entries removed from global settings.json
+  /usr/bin/python3 -c "
+import json
+s = json.load(open('$TEST_HOME/.claude/settings.json'))
+hooks = s.get('hooks', {})
+for event, entries in hooks.items():
+    for entry in entries:
+        for h in entry.get('hooks', []):
+            assert 'peon.sh' not in h.get('command', ''), f'peon.sh still in {event}'
+print('OK')
+"
   # Install and skill directories removed
   [ ! -d "$LOCAL_INSTALL_DIR" ]
   [ ! -d "$PROJECT_DIR/.claude/skills/peon-ping-toggle" ]
