@@ -332,7 +332,7 @@ APPLESCRIPT
         if [ -f "$icon_path" ]; then
           icon_flag="--icon=$icon_path"
         fi
-        nohup notify-send --urgency="$urgency" $icon_flag "$title" "$msg" >/dev/null 2>&1 &
+        nohup notify-send --urgency="$urgency" --expire-time=5000 $icon_flag "$title" "$msg" >/dev/null 2>&1 &
       fi
       ;;
   esac
