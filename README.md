@@ -352,7 +352,3 @@ Sound packs are downloaded from the [OpenPeon registry](https://github.com/PeonP
 - [OpenPeon registry](https://github.com/PeonPing/registry) — pack registry (GitHub Pages)
 - [og-packs](https://github.com/PeonPing/og-packs) — official sound packs
 - [License (MIT)](LICENSE)
-
-## Contributors
-
-- [@bjnewman](https://github.com/bjnewman) — Kiro CLI adapter ([#106](https://github.com/PeonPing/peon-ping/pull/106))
