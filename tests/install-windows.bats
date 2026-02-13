@@ -89,8 +89,16 @@ elif hook_event == 'Stop':
         category = None
     state['last_stop_time'] = now
 elif hook_event == 'Notification':
-    # Permission prompt handled by PermissionRequest, skip here
-    category = None
+    ntype = event_data.get('notification_type')
+    if ntype == 'permission_prompt':
+        # PermissionRequest event handles the sound, skip here
+        category = None
+    elif ntype == 'idle_prompt':
+        # Stop event already played the sound
+        category = None
+    else:
+        # Other notification types (e.g., tool results) map to task.complete
+        category = 'task.complete'
 elif hook_event == 'PermissionRequest':
     category = 'input.required'
 elif hook_event == 'UserPromptSubmit':
