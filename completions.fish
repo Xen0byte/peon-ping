@@ -28,6 +28,7 @@ complete -c peon -n __peon_no_subcommand -a toggle -d "Toggle mute on/off"
 complete -c peon -n __peon_no_subcommand -a status -d "Show current status"
 complete -c peon -n __peon_no_subcommand -a packs -d "Manage sound packs"
 complete -c peon -n __peon_no_subcommand -a notifications -d "Control desktop notifications"
+complete -c peon -n __peon_no_subcommand -a mobile -d "Configure mobile push notifications"
 complete -c peon -n __peon_no_subcommand -a relay -d "Start audio relay for devcontainers"
 complete -c peon -n __peon_no_subcommand -a help -d "Show help message"
 
@@ -54,6 +55,15 @@ complete -c peon -n "__peon_packs_subcommand remove" -a "(
     end
   end
 )"
+
+# mobile subcommands
+complete -c peon -n "__peon_using_subcommand mobile" -a ntfy -d "Set up ntfy.sh notifications"
+complete -c peon -n "__peon_using_subcommand mobile" -a pushover -d "Set up Pushover notifications"
+complete -c peon -n "__peon_using_subcommand mobile" -a telegram -d "Set up Telegram notifications"
+complete -c peon -n "__peon_using_subcommand mobile" -a on -d "Enable mobile notifications"
+complete -c peon -n "__peon_using_subcommand mobile" -a off -d "Disable mobile notifications"
+complete -c peon -n "__peon_using_subcommand mobile" -a status -d "Show mobile config"
+complete -c peon -n "__peon_using_subcommand mobile" -a test -d "Send test notification"
 
 # notifications subcommands
 complete -c peon -n "__peon_using_subcommand notifications" -a on -d "Enable desktop notifications"

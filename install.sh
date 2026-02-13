@@ -36,12 +36,19 @@ FALLBACK_REF="v1.1.0"
 # --- Platform detection ---
 detect_platform() {
   case "$(uname -s)" in
-    Darwin) echo "mac" ;;
+    Darwin)
+      if [ -n "${SSH_CONNECTION:-}" ] || [ -n "${SSH_CLIENT:-}" ]; then
+        echo "ssh"
+      else
+        echo "mac"
+      fi ;;
     Linux)
       if grep -qi microsoft /proc/version 2>/dev/null; then
         echo "wsl"
       elif [ "${REMOTE_CONTAINERS:-}" = "true" ] || [ "${CODESPACES:-}" = "true" ]; then
         echo "devcontainer"
+      elif [ -n "${SSH_CONNECTION:-}" ] || [ -n "${SSH_CLIENT:-}" ]; then
+        echo "ssh"
       else
         echo "linux"
       fi ;;
@@ -66,8 +73,8 @@ else
 fi
 
 # --- Prerequisites ---
-if [ "$PLATFORM" != "mac" ] && [ "$PLATFORM" != "wsl" ] && [ "$PLATFORM" != "linux" ] && [ "$PLATFORM" != "devcontainer" ]; then
-  echo "Error: peon-ping requires macOS, Linux, WSL, or a devcontainer"
+if [ "$PLATFORM" != "mac" ] && [ "$PLATFORM" != "wsl" ] && [ "$PLATFORM" != "linux" ] && [ "$PLATFORM" != "devcontainer" ] && [ "$PLATFORM" != "ssh" ]; then
+  echo "Error: peon-ping requires macOS, Linux, WSL, SSH, or a devcontainer"
   exit 1
 fi
 
@@ -93,6 +100,14 @@ elif [ "$PLATFORM" = "wsl" ]; then
 elif [ "$PLATFORM" = "devcontainer" ]; then
   echo "Devcontainer detected. Audio will play through the relay on your host."
   echo "Run 'peon relay' on your host machine after installation."
+  if ! command -v curl &>/dev/null; then
+    echo "Warning: curl not found. Install curl for relay audio playback."
+  fi
+elif [ "$PLATFORM" = "ssh" ]; then
+  echo "SSH session detected. Audio will play through the relay on your local machine."
+  echo "After install:"
+  echo "  1. On your LOCAL machine, run: peon relay --daemon"
+  echo "  2. Reconnect with: ssh -R 19998:localhost:19998 <host>"
   if ! command -v curl &>/dev/null; then
     echo "Warning: curl not found. Install curl for relay audio playback."
   fi
@@ -444,6 +459,11 @@ if [ "$PLATFORM" = "devcontainer" ]; then
   echo "Skipping test sound (devcontainer — start relay on host to test)"
   echo "  Host: peon relay"
   echo "  Test: curl -sf http://host.docker.internal:19998/health"
+elif [ "$PLATFORM" = "ssh" ]; then
+  echo "Skipping test sound (SSH — start relay on your local machine to test)"
+  echo "  Local: peon relay --daemon"
+  echo "  SSH:   ssh -R 19998:localhost:19998 <host>"
+  echo "  Test:  curl -sf http://localhost:19998/health"
 else
   echo "Testing sound..."
   ACTIVE_PACK=$(python3 -c "

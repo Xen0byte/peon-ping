@@ -1015,3 +1015,236 @@ JSON
   relay_was_called
   grep -q "/notify" "$TEST_DIR/relay_curl.log"
 }
+
+# ============================================================
+# SSH detection and relay playback
+# ============================================================
+
+@test "ssh plays sound via relay curl" {
+  export PLATFORM=ssh
+  touch "$TEST_DIR/.relay_available"
+  run_peon '{"hook_event_name":"SessionStart","cwd":"/tmp/myproject","session_id":"s1","permission_mode":"default"}'
+  [ "$PEON_EXIT" -eq 0 ]
+  relay_was_called
+  cmdline=$(relay_cmdline)
+  [[ "$cmdline" == *"/play?"* ]]
+  [[ "$cmdline" == *"X-Volume"* ]]
+}
+
+@test "ssh does not call afplay or linux audio" {
+  export PLATFORM=ssh
+  touch "$TEST_DIR/.relay_available"
+  run_peon '{"hook_event_name":"SessionStart","cwd":"/tmp/myproject","session_id":"s1","permission_mode":"default"}'
+  [ "$PEON_EXIT" -eq 0 ]
+  ! afplay_was_called
+  ! linux_audio_was_called
+}
+
+@test "ssh exits cleanly when relay unavailable" {
+  export PLATFORM=ssh
+  # .relay_available NOT created, so mock curl returns exit 7
+  run_peon '{"hook_event_name":"SessionStart","cwd":"/tmp/myproject","session_id":"s1","permission_mode":"default"}'
+  [ "$PEON_EXIT" -eq 0 ]
+}
+
+@test "ssh SessionStart shows relay guidance when relay unavailable" {
+  export PLATFORM=ssh
+  run_peon '{"hook_event_name":"SessionStart","cwd":"/tmp/myproject","session_id":"s1","permission_mode":"default"}'
+  [ "$PEON_EXIT" -eq 0 ]
+  [[ "$PEON_STDERR" == *"SSH session detected"* ]]
+  [[ "$PEON_STDERR" == *"relay not reachable"* ]]
+  [[ "$PEON_STDERR" == *"ssh -R"* ]]
+}
+
+@test "ssh SessionStart does NOT show relay guidance when relay available" {
+  export PLATFORM=ssh
+  touch "$TEST_DIR/.relay_available"
+  run_peon '{"hook_event_name":"SessionStart","cwd":"/tmp/myproject","session_id":"s1","permission_mode":"default"}'
+  [ "$PEON_EXIT" -eq 0 ]
+  [[ "$PEON_STDERR" != *"relay not reachable"* ]]
+}
+
+@test "ssh relay uses localhost as default host" {
+  export PLATFORM=ssh
+  touch "$TEST_DIR/.relay_available"
+  run_peon '{"hook_event_name":"SessionStart","cwd":"/tmp/myproject","session_id":"s1","permission_mode":"default"}'
+  relay_was_called
+  cmdline=$(relay_cmdline)
+  [[ "$cmdline" == *"localhost"* ]]
+}
+
+@test "ssh relay respects PEON_RELAY_HOST override" {
+  export PLATFORM=ssh
+  export PEON_RELAY_HOST="custom.host.local"
+  touch "$TEST_DIR/.relay_available"
+  run_peon '{"hook_event_name":"SessionStart","cwd":"/tmp/myproject","session_id":"s1","permission_mode":"default"}'
+  relay_was_called
+  cmdline=$(relay_cmdline)
+  [[ "$cmdline" == *"custom.host.local"* ]]
+}
+
+@test "ssh relay respects PEON_RELAY_PORT override" {
+  export PLATFORM=ssh
+  export PEON_RELAY_PORT="12345"
+  touch "$TEST_DIR/.relay_available"
+  run_peon '{"hook_event_name":"SessionStart","cwd":"/tmp/myproject","session_id":"s1","permission_mode":"default"}'
+  relay_was_called
+  cmdline=$(relay_cmdline)
+  [[ "$cmdline" == *"12345"* ]]
+}
+
+@test "ssh notification sent via relay POST" {
+  export PLATFORM=ssh
+  touch "$TEST_DIR/.relay_available"
+  # PermissionRequest triggers notification
+  run_peon '{"hook_event_name":"PermissionRequest","cwd":"/tmp/myproject","session_id":"s1","permission_mode":"default"}'
+  [ "$PEON_EXIT" -eq 0 ]
+  relay_was_called
+  grep -q "/notify" "$TEST_DIR/relay_curl.log"
+}
+
+# ============================================================
+# Mobile push notifications
+# ============================================================
+
+@test "mobile ntfy sends push notification on Stop" {
+  cat > "$TEST_DIR/config.json" <<'JSON'
+{
+  "active_pack": "peon", "volume": 0.5, "enabled": true, "categories": {},
+  "mobile_notify": { "enabled": true, "service": "ntfy", "topic": "test-topic", "server": "https://ntfy.sh" }
+}
+JSON
+  run_peon '{"hook_event_name":"Stop","cwd":"/tmp/myproject","session_id":"s1","permission_mode":"default"}'
+  [ "$PEON_EXIT" -eq 0 ]
+  mobile_was_called
+  cmdline=$(mobile_cmdline)
+  [[ "$cmdline" == *"MOBILE_NTFY"* ]]
+  [[ "$cmdline" == *"ntfy.sh/test-topic"* ]]
+}
+
+@test "mobile ntfy sends push on PermissionRequest" {
+  cat > "$TEST_DIR/config.json" <<'JSON'
+{
+  "active_pack": "peon", "volume": 0.5, "enabled": true, "categories": {},
+  "mobile_notify": { "enabled": true, "service": "ntfy", "topic": "test-topic", "server": "https://ntfy.sh" }
+}
+JSON
+  run_peon '{"hook_event_name":"PermissionRequest","cwd":"/tmp/myproject","session_id":"s1","permission_mode":"default"}'
+  [ "$PEON_EXIT" -eq 0 ]
+  mobile_was_called
+  cmdline=$(mobile_cmdline)
+  [[ "$cmdline" == *"Priority: high"* ]]
+}
+
+@test "mobile disabled does not send push" {
+  cat > "$TEST_DIR/config.json" <<'JSON'
+{
+  "active_pack": "peon", "volume": 0.5, "enabled": true, "categories": {},
+  "mobile_notify": { "enabled": false, "service": "ntfy", "topic": "test-topic" }
+}
+JSON
+  run_peon '{"hook_event_name":"Stop","cwd":"/tmp/myproject","session_id":"s1","permission_mode":"default"}'
+  [ "$PEON_EXIT" -eq 0 ]
+  ! mobile_was_called
+}
+
+@test "mobile not configured does not send push" {
+  run_peon '{"hook_event_name":"Stop","cwd":"/tmp/myproject","session_id":"s1","permission_mode":"default"}'
+  [ "$PEON_EXIT" -eq 0 ]
+  ! mobile_was_called
+}
+
+@test "mobile paused does not send push" {
+  cat > "$TEST_DIR/config.json" <<'JSON'
+{
+  "active_pack": "peon", "volume": 0.5, "enabled": true, "categories": {},
+  "mobile_notify": { "enabled": true, "service": "ntfy", "topic": "test-topic" }
+}
+JSON
+  touch "$TEST_DIR/.paused"
+  run_peon '{"hook_event_name":"Stop","cwd":"/tmp/myproject","session_id":"s1","permission_mode":"default"}'
+  [ "$PEON_EXIT" -eq 0 ]
+  ! mobile_was_called
+}
+
+@test "mobile does not send on SessionStart (no NOTIFY)" {
+  cat > "$TEST_DIR/config.json" <<'JSON'
+{
+  "active_pack": "peon", "volume": 0.5, "enabled": true, "categories": {},
+  "mobile_notify": { "enabled": true, "service": "ntfy", "topic": "test-topic" }
+}
+JSON
+  run_peon '{"hook_event_name":"SessionStart","cwd":"/tmp/myproject","session_id":"s1","permission_mode":"default"}'
+  [ "$PEON_EXIT" -eq 0 ]
+  ! mobile_was_called
+}
+
+@test "mobile pushover sends notification" {
+  cat > "$TEST_DIR/config.json" <<'JSON'
+{
+  "active_pack": "peon", "volume": 0.5, "enabled": true, "categories": {},
+  "mobile_notify": { "enabled": true, "service": "pushover", "user_key": "ukey123", "app_token": "atoken456" }
+}
+JSON
+  run_peon '{"hook_event_name":"Stop","cwd":"/tmp/myproject","session_id":"s1","permission_mode":"default"}'
+  [ "$PEON_EXIT" -eq 0 ]
+  mobile_was_called
+  cmdline=$(mobile_cmdline)
+  [[ "$cmdline" == *"MOBILE_PUSHOVER"* ]]
+  [[ "$cmdline" == *"api.pushover.net"* ]]
+}
+
+@test "mobile telegram sends notification" {
+  cat > "$TEST_DIR/config.json" <<'JSON'
+{
+  "active_pack": "peon", "volume": 0.5, "enabled": true, "categories": {},
+  "mobile_notify": { "enabled": true, "service": "telegram", "bot_token": "bot123", "chat_id": "456" }
+}
+JSON
+  run_peon '{"hook_event_name":"Stop","cwd":"/tmp/myproject","session_id":"s1","permission_mode":"default"}'
+  [ "$PEON_EXIT" -eq 0 ]
+  mobile_was_called
+  cmdline=$(mobile_cmdline)
+  [[ "$cmdline" == *"MOBILE_TELEGRAM"* ]]
+  [[ "$cmdline" == *"api.telegram.org"* ]]
+}
+
+@test "peon mobile ntfy configures mobile_notify" {
+  bash "$PEON_SH" mobile ntfy my-test-topic
+  python3 -c "
+import json
+cfg = json.load(open('$TEST_DIR/config.json'))
+mn = cfg['mobile_notify']
+assert mn['service'] == 'ntfy', f'expected ntfy, got {mn[\"service\"]}'
+assert mn['topic'] == 'my-test-topic', f'expected my-test-topic, got {mn[\"topic\"]}'
+assert mn['enabled'] == True
+"
+}
+
+@test "peon mobile off disables mobile" {
+  # First configure
+  bash "$PEON_SH" mobile ntfy some-topic
+  # Then disable
+  bash "$PEON_SH" mobile off
+  python3 -c "
+import json
+cfg = json.load(open('$TEST_DIR/config.json'))
+mn = cfg['mobile_notify']
+assert mn['enabled'] == False, 'expected disabled'
+assert mn['service'] == 'ntfy', 'service should be preserved'
+"
+}
+
+@test "peon mobile status shows config" {
+  bash "$PEON_SH" mobile ntfy status-topic
+  output=$(bash "$PEON_SH" mobile status)
+  [[ "$output" == *"on"* ]]
+  [[ "$output" == *"ntfy"* ]]
+  [[ "$output" == *"status-topic"* ]]
+}
+
+@test "help shows mobile commands" {
+  output=$(bash "$PEON_SH" help)
+  [[ "$output" == *"mobile"* ]]
+  [[ "$output" == *"ntfy"* ]]
+}

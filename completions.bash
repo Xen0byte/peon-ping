@@ -30,12 +30,17 @@ _peon_completions() {
           COMPREPLY=( $(compgen -W "on off" -- "$cur") )
         fi
         return 0 ;;
+      mobile)
+        if [ "$cword" -eq 2 ]; then
+          COMPREPLY=( $(compgen -W "ntfy pushover telegram on off status test" -- "$cur") )
+        fi
+        return 0 ;;
     esac
     return 0
   fi
 
   # Top-level commands
-  COMPREPLY=( $(compgen -W "pause resume toggle status packs notifications relay help" -- "$cur") )
+  COMPREPLY=( $(compgen -W "pause resume toggle status packs notifications mobile relay help" -- "$cur") )
   return 0
 }
 

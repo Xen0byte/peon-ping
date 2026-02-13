@@ -6,12 +6,19 @@ set -uo pipefail
 # --- Platform detection ---
 detect_platform() {
   case "$(uname -s)" in
-    Darwin) echo "mac" ;;
+    Darwin)
+      if [ -n "${SSH_CONNECTION:-}" ] || [ -n "${SSH_CLIENT:-}" ]; then
+        echo "ssh"
+      else
+        echo "mac"
+      fi ;;
     Linux)
       if grep -qi microsoft /proc/version 2>/dev/null; then
         echo "wsl"
       elif [ "${REMOTE_CONTAINERS:-}" = "true" ] || [ "${CODESPACES:-}" = "true" ]; then
         echo "devcontainer"
+      elif [ -n "${SSH_CONNECTION:-}" ] || [ -n "${SSH_CLIENT:-}" ]; then
+        echo "ssh"
       else
         echo "linux"
       fi ;;
@@ -165,8 +172,10 @@ play_sound() {
       " &>/dev/null &
       save_sound_pid $!
       ;;
-    devcontainer)
-      local relay_host="${PEON_RELAY_HOST:-host.docker.internal}"
+    devcontainer|ssh)
+      local relay_host_default="host.docker.internal"
+      [ "$PLATFORM" = "ssh" ] && relay_host_default="localhost"
+      local relay_host="${PEON_RELAY_HOST:-$relay_host_default}"
       local relay_port="${PEON_RELAY_PORT:-19998}"
       local rel_path="${file#$PEON_DIR/}"
       local encoded_path
@@ -294,8 +303,10 @@ APPLESCRIPT
         rm -rf "$slot_dir/slot-$slot"
       ) &
       ;;
-    devcontainer)
-      local relay_host="${PEON_RELAY_HOST:-host.docker.internal}"
+    devcontainer|ssh)
+      local relay_host_default="host.docker.internal"
+      [ "$PLATFORM" = "ssh" ] && relay_host_default="localhost"
+      local relay_host="${PEON_RELAY_HOST:-$relay_host_default}"
       local relay_port="${PEON_RELAY_PORT:-19998}"
       local json_title json_msg
       json_title=$(python3 -c "import json,sys; print(json.dumps(sys.argv[1]))" "$title" 2>/dev/null || echo "\"$title\"")
@@ -328,7 +339,7 @@ terminal_is_focused() {
       local frontmost
       frontmost=$(osascript -e 'tell application "System Events" to get name of first process whose frontmost is true' 2>/dev/null)
       case "$frontmost" in
-        Terminal|iTerm2|Warp|Alacritty|kitty|WezTerm|ghostty) return 0 ;;
+        Terminal|iTerm2|Warp|Alacritty|kitty|WezTerm|Ghostty) return 0 ;;
         *) return 1 ;;
       esac
       ;;
@@ -336,8 +347,8 @@ terminal_is_focused() {
       # Checking Windows focus from WSL adds too much latency; always notify
       return 1
       ;;
-    devcontainer)
-      # Cannot detect host window focus from a container; always notify
+    devcontainer|ssh)
+      # Cannot detect host window focus from a container/remote; always notify
       return 1
       ;;
     linux)
@@ -357,6 +368,87 @@ terminal_is_focused() {
   esac
 }
 
+# --- Mobile push notification ---
+# Sends push notifications to phone via ntfy.sh, Pushover, or Telegram.
+# Config: config.json → mobile_notify: { service, topic/user_key/chat_id, ... }
+send_mobile_notification() {
+  local msg="$1" title="$2" color="${3:-red}"
+  local config="$CONFIG"
+
+  # Read mobile config via Python (fast, single invocation)
+  local mobile_vars
+  mobile_vars=$(python3 -c "
+import json, sys, shlex
+q = shlex.quote
+try:
+    cfg = json.load(open('$config'))
+    mn = cfg.get('mobile_notify', {})
+except:
+    mn = {}
+if not mn or not mn.get('enabled', True):
+    print('MOBILE_SERVICE=')
+    sys.exit(0)
+service = mn.get('service', '')
+print('MOBILE_SERVICE=' + q(service))
+print('MOBILE_TOPIC=' + q(mn.get('topic', '')))
+print('MOBILE_SERVER=' + q(mn.get('server', 'https://ntfy.sh')))
+print('MOBILE_TOKEN=' + q(mn.get('token', '')))
+print('MOBILE_USER_KEY=' + q(mn.get('user_key', '')))
+print('MOBILE_APP_TOKEN=' + q(mn.get('app_token', '')))
+print('MOBILE_CHAT_ID=' + q(mn.get('chat_id', '')))
+print('MOBILE_BOT_TOKEN=' + q(mn.get('bot_token', '')))
+" 2>/dev/null) || return 0
+
+  eval "$mobile_vars"
+
+  [ -z "$MOBILE_SERVICE" ] && return 0
+
+  # Map color to priority
+  local priority="default"
+  case "$color" in
+    red) priority="high" ;;
+    yellow) priority="default" ;;
+    blue) priority="low" ;;
+  esac
+
+  case "$MOBILE_SERVICE" in
+    ntfy)
+      [ -z "$MOBILE_TOPIC" ] && return 0
+      local ntfy_url="${MOBILE_SERVER}/${MOBILE_TOPIC}"
+      local auth_header=""
+      [ -n "$MOBILE_TOKEN" ] && auth_header="-H \"Authorization: Bearer ${MOBILE_TOKEN}\""
+      nohup curl -sf \
+        -H "Title: $title" \
+        -H "Priority: $priority" \
+        -H "Tags: video_game" \
+        $auth_header \
+        -d "$msg" \
+        "$ntfy_url" >/dev/null 2>&1 &
+      ;;
+    pushover)
+      [ -z "$MOBILE_USER_KEY" ] || [ -z "$MOBILE_APP_TOKEN" ] && return 0
+      local po_priority=0
+      case "$priority" in
+        high) po_priority=1 ;;
+        low) po_priority=-1 ;;
+      esac
+      nohup curl -sf \
+        -d "token=${MOBILE_APP_TOKEN}" \
+        -d "user=${MOBILE_USER_KEY}" \
+        -d "title=${title}" \
+        -d "message=${msg}" \
+        -d "priority=${po_priority}" \
+        "https://api.pushover.net/1/messages.json" >/dev/null 2>&1 &
+      ;;
+    telegram)
+      [ -z "$MOBILE_BOT_TOKEN" ] || [ -z "$MOBILE_CHAT_ID" ] && return 0
+      local tg_text="${title}%0A${msg}"
+      nohup curl -sf \
+        "https://api.telegram.org/bot${MOBILE_BOT_TOKEN}/sendMessage?chat_id=${MOBILE_CHAT_ID}&text=${tg_text}" >/dev/null 2>&1 &
+      ;;
+  esac
+}
+
 # --- CLI subcommands (must come before INPUT=$(cat) which blocks on stdin) ---
 PAUSED_FILE="$PEON_DIR/.paused"
 case "${1:-}" in
@@ -369,79 +461,21 @@ case "${1:-}" in
   status)
     [ -f "$PAUSED_FILE" ] && echo "peon-ping: paused" || echo "peon-ping: active"
     python3 -c "
-import json, os
-
-config_path = '$CONFIG'
-peon_dir = '$PEON_DIR'
-
-# --- Config ---
+import json
 try:
-    c = json.load(open(config_path))
+    c = json.load(open('$CONFIG'))
+    dn = c.get('desktop_notifications', True)
+    print('peon-ping: desktop notifications ' + ('on' if dn else 'off'))
+    mn = c.get('mobile_notify', {})
+    if mn and mn.get('service'):
+        enabled = mn.get('enabled', True)
+        svc = mn.get('service', '?')
+        print(f'peon-ping: mobile notifications ' + ('on' if enabled else 'off') + f' ({svc})')
+    else:
+        print('peon-ping: mobile notifications not configured')
 except:
-    c = {}
-
-dn = c.get('desktop_notifications', True)
-print('peon-ping: desktop notifications ' + ('on' if dn else 'off'))
-
-# --- Active pack ---
-active = c.get('active_pack', 'peon')
-packs_dir = os.path.join(peon_dir, 'packs')
-display_name = active
-pack_count = 0
-if os.path.isdir(packs_dir):
-    for d in os.listdir(packs_dir):
-        dpath = os.path.join(packs_dir, d)
-        if not os.path.isdir(dpath):
-            continue
-        has_manifest = (
-            os.path.exists(os.path.join(dpath, 'openpeon.json')) or
-            os.path.exists(os.path.join(dpath, 'manifest.json'))
-        )
-        if has_manifest:
-            pack_count += 1
-            if d == active:
-                for mname in ('openpeon.json', 'manifest.json'):
-                    mpath = os.path.join(dpath, mname)
-                    if os.path.exists(mpath):
-                        try:
-                            display_name = json.load(open(mpath)).get('display_name', active)
-                        except:
-                            pass
-                        break
-print(f'peon-ping: active pack: {active} ({display_name})')
-print(f'peon-ping: {pack_count} pack(s) installed')
-
-# --- IDE detection ---
-home = os.path.expanduser('~')
-claude_dir = os.environ.get('CLAUDE_CONFIG_DIR', os.path.join(home, '.claude'))
-xdg_config = os.environ.get('XDG_CONFIG_HOME', os.path.join(home, '.config'))
-opencode_dir = os.path.join(xdg_config, 'opencode')
-
-ides = []
-
-# Claude Code: check if hooks are registered
-claude_hooks_dir = os.path.join(claude_dir, 'hooks', 'peon-ping')
-if os.path.isdir(claude_dir):
-    if os.path.exists(os.path.join(claude_hooks_dir, 'peon.sh')):
-        ides.append(('Claude Code', claude_dir, 'installed'))
-    else:
-        ides.append(('Claude Code', claude_dir, 'detected (not set up)'))
-
-# OpenCode: check if plugin is installed
-opencode_plugin = os.path.join(opencode_dir, 'plugins', 'peon-ping.ts')
-if os.path.isdir(opencode_dir):
-    if os.path.exists(opencode_plugin):
-        ides.append(('OpenCode', opencode_dir, 'installed'))
-    else:
-        ides.append(('OpenCode', opencode_dir, 'detected (not set up)'))
-
-if ides:
-    print('peon-ping: IDEs')
-    for name, path, status in ides:
-        marker = '[x]' if 'installed' == status else '[ ]'
-        print(f'  {marker} {name:12s} {path} ({status})')
-else:
-    print('peon-ping: no supported IDEs detected')
+    print('peon-ping: desktop notifications on')
+    print('peon-ping: mobile notifications not configured')
 "
     exit 0 ;;
   notifications)
@@ -666,6 +700,194 @@ if rotation:
       *)
         echo "Usage: peon packs <list|use|next|remove>" >&2; exit 1 ;;
     esac ;;
+  mobile)
+    case "${2:-}" in
+      ntfy)
+        TOPIC="${3:-}"
+        if [ -z "$TOPIC" ]; then
+          echo "Usage: peon mobile ntfy <topic> [--server=URL] [--token=TOKEN]" >&2
+          echo "" >&2
+          echo "Setup:" >&2
+          echo "  1. Install ntfy app on your phone (ntfy.sh)" >&2
+          echo "  2. Subscribe to your topic in the app" >&2
+          echo "  3. Run: peon mobile ntfy my-unique-topic" >&2
+          exit 1
+        fi
+        NTFY_SERVER="https://ntfy.sh"
+        NTFY_TOKEN=""
+        for arg in "${@:4}"; do
+          case "$arg" in
+            --server=*) NTFY_SERVER="${arg#--server=}" ;;
+            --token=*)  NTFY_TOKEN="${arg#--token=}" ;;
+          esac
+        done
+        python3 -c "
+import json
+config_path = '$CONFIG'
+try:
+    cfg = json.load(open(config_path))
+except:
+    cfg = {}
+cfg['mobile_notify'] = {
+    'enabled': True,
+    'service': 'ntfy',
+    'topic': '$TOPIC',
+    'server': '$NTFY_SERVER',
+    'token': '$NTFY_TOKEN'
+}
+json.dump(cfg, open(config_path, 'w'), indent=2)
+"
+        echo "peon-ping: mobile notifications enabled via ntfy"
+        echo "  Topic:  $TOPIC"
+        echo "  Server: $NTFY_SERVER"
+        echo ""
+        echo "Install the ntfy app and subscribe to '$TOPIC'"
+        # Send test notification
+        curl -sf -H "Title: peon-ping" -H "Tags: video_game" \
+          -d "Mobile notifications connected!" \
+          "${NTFY_SERVER}/${TOPIC}" >/dev/null 2>&1 && echo "Test notification sent!" || echo "Warning: could not reach ntfy server"
+        exit 0 ;;
+      pushover)
+        USER_KEY="${3:-}"
+        APP_TOKEN="${4:-}"
+        if [ -z "$USER_KEY" ] || [ -z "$APP_TOKEN" ]; then
+          echo "Usage: peon mobile pushover <user_key> <app_token>" >&2
+          exit 1
+        fi
+        python3 -c "
+import json
+config_path = '$CONFIG'
+try:
+    cfg = json.load(open(config_path))
+except:
+    cfg = {}
+cfg['mobile_notify'] = {
+    'enabled': True,
+    'service': 'pushover',
+    'user_key': '$USER_KEY',
+    'app_token': '$APP_TOKEN'
+}
+json.dump(cfg, open(config_path, 'w'), indent=2)
+"
+        echo "peon-ping: mobile notifications enabled via Pushover"
+        exit 0 ;;
+      telegram)
+        BOT_TOKEN="${3:-}"
+        CHAT_ID="${4:-}"
+        if [ -z "$BOT_TOKEN" ] || [ -z "$CHAT_ID" ]; then
+          echo "Usage: peon mobile telegram <bot_token> <chat_id>" >&2
+          exit 1
+        fi
+        python3 -c "
+import json
+config_path = '$CONFIG'
+try:
+    cfg = json.load(open(config_path))
+except:
+    cfg = {}
+cfg['mobile_notify'] = {
+    'enabled': True,
+    'service': 'telegram',
+    'bot_token': '$BOT_TOKEN',
+    'chat_id': '$CHAT_ID'
+}
+json.dump(cfg, open(config_path, 'w'), indent=2)
+"
+        echo "peon-ping: mobile notifications enabled via Telegram"
+        exit 0 ;;
+      off)
+        python3 -c "
+import json
+config_path = '$CONFIG'
+try:
+    cfg = json.load(open(config_path))
+except:
+    cfg = {}
+mn = cfg.get('mobile_notify', {})
+mn['enabled'] = False
+cfg['mobile_notify'] = mn
+json.dump(cfg, open(config_path, 'w'), indent=2)
+"
+        echo "peon-ping: mobile notifications disabled"
+        exit 0 ;;
+      on)
+        python3 -c "
+import json
+config_path = '$CONFIG'
+try:
+    cfg = json.load(open(config_path))
+except:
+    cfg = {}
+mn = cfg.get('mobile_notify', {})
+if not mn.get('service'):
+    print('peon-ping: no mobile service configured. Run: peon mobile ntfy <topic>')
+    raise SystemExit(1)
+mn['enabled'] = True
+cfg['mobile_notify'] = mn
+json.dump(cfg, open(config_path, 'w'), indent=2)
+print('peon-ping: mobile notifications enabled')
+"
+        exit $? ;;
+      status)
+        python3 -c "
+import json
+try:
+    cfg = json.load(open('$CONFIG'))
+    mn = cfg.get('mobile_notify', {})
+except:
+    mn = {}
+if not mn or not mn.get('service'):
+    print('peon-ping: mobile notifications not configured')
+    print('  Run: peon mobile ntfy <topic>')
+else:
+    enabled = mn.get('enabled', True)
+    service = mn.get('service', '?')
+    status = 'on' if enabled else 'off'
+    print(f'peon-ping: mobile notifications {status} ({service})')
+    if service == 'ntfy':
+        print(f'  Topic:  {mn.get(\"topic\", \"?\")}')
+        print(f'  Server: {mn.get(\"server\", \"https://ntfy.sh\")}')
+    elif service == 'pushover':
+        print(f'  User:   {mn.get(\"user_key\", \"?\")[:8]}...')
+    elif service == 'telegram':
+        print(f'  Chat:   {mn.get(\"chat_id\", \"?\")}')
+"
+        exit 0 ;;
+      test)
+        python3 -c "
+import json, sys
+try:
+    cfg = json.load(open('$CONFIG'))
+    mn = cfg.get('mobile_notify', {})
+except:
+    mn = {}
+if not mn or not mn.get('service') or not mn.get('enabled', True):
+    print('peon-ping: mobile notifications not configured or disabled')
+    sys.exit(1)
+print('service=' + mn.get('service', ''))
+" > /dev/null 2>&1 || { echo "peon-ping: mobile not configured" >&2; exit 1; }
+        send_mobile_notification "Test notification from peon-ping" "peon-ping" "blue"
+        wait
+        echo "peon-ping: test notification sent"
+        exit 0 ;;
+      *)
+        echo "Usage: peon mobile <ntfy|pushover|telegram|on|off|status|test>" >&2
+        echo "" >&2
+        echo "Quick start (free, no account needed):" >&2
+        echo "  1. Install ntfy app on your phone (ntfy.sh)" >&2
+        echo "  2. Subscribe to a unique topic in the app" >&2
+        echo "  3. Run: peon mobile ntfy <your-topic>" >&2
+        echo "" >&2
+        echo "Commands:" >&2
+        echo "  ntfy <topic>                Set up ntfy.sh notifications" >&2
+        echo "  pushover <user> <app>       Set up Pushover notifications" >&2
+        echo "  telegram <bot_token> <chat>  Set up Telegram notifications" >&2
+        echo "  on                          Enable mobile notifications" >&2
+        echo "  off                         Disable mobile notifications" >&2
+        echo "  status                      Show current mobile config" >&2
+        echo "  test                        Send a test notification" >&2
+        exit 1 ;;
+    esac ;;
   relay)
     RELAY_SCRIPT="$PEON_DIR/relay.sh"
     if [ ! -f "$RELAY_SCRIPT" ]; then
@@ -695,8 +917,17 @@ Pack management:
   packs next           Cycle to the next pack
   packs remove <p1,p2> Remove specific packs
 
-Relay (devcontainer/Codespaces):
-  relay [--port=N]     Start audio relay on the host
+Mobile notifications:
+  mobile ntfy <topic>  Set up ntfy.sh push notifications
+  mobile off           Disable mobile notifications
+  mobile status        Show mobile config
+  mobile test          Send a test notification
+
+Relay (SSH/devcontainer/Codespaces):
+  relay [--port=N]     Start audio relay on your local machine
+  relay --daemon       Start relay in background
+  relay --stop         Stop background relay
+  relay --status       Check if relay is running
 HELPEOF
     exit 0 ;;
   --*)
@@ -965,6 +1196,9 @@ print('NOTIFY=' + q(notify))
 print('NOTIFY_COLOR=' + q(notify_color))
 print('MSG=' + q(msg))
 print('DESKTOP_NOTIF=' + ('true' if desktop_notif else 'false'))
+mn = cfg.get('mobile_notify', {})
+mobile_on = bool(mn and mn.get('service') and mn.get('enabled', True))
+print('MOBILE_NOTIF=' + ('true' if mobile_on else 'false'))
 print('SOUND_FILE=' + q(sound_file))
 " <<< "$INPUT" 2>/dev/null)"
 
@@ -1021,6 +1255,17 @@ if [ "$EVENT" = "SessionStart" ] && [ "$PLATFORM" = "devcontainer" ]; then
   fi
 fi
 
+# --- SSH relay guidance on SessionStart ---
+if [ "$EVENT" = "SessionStart" ] && [ "$PLATFORM" = "ssh" ]; then
+  RELAY_HOST="${PEON_RELAY_HOST:-localhost}"
+  RELAY_PORT="${PEON_RELAY_PORT:-19998}"
+  if ! curl -sf --connect-timeout 1 --max-time 2 "http://${RELAY_HOST}:${RELAY_PORT}/health" >/dev/null 2>&1; then
+    echo "peon-ping: SSH session detected but audio relay not reachable at ${RELAY_HOST}:${RELAY_PORT}" >&2
+    echo "peon-ping: on your LOCAL machine, run: peon relay" >&2
+    echo "peon-ping: then reconnect with: ssh -R 19998:localhost:19998 <host>" >&2
+  fi
+fi
+
 # --- Build tab title ---
 TITLE="${MARKER}${PROJECT}: ${STATUS}"
 
@@ -1039,6 +1284,11 @@ if [ -n "$NOTIFY" ] && [ "$PAUSED" != "true" ] && [ "${DESKTOP_NOTIF:-true}" = "
   if ! terminal_is_focused; then
     send_notification "$MSG" "$TITLE" "${NOTIFY_COLOR:-red}"
   fi
+fi
+
+# --- Mobile push notification (always sends when configured, regardless of focus) ---
+if [ -n "$NOTIFY" ] && [ "$PAUSED" != "true" ] && [ "${MOBILE_NOTIF:-false}" = "true" ]; then
+  send_mobile_notification "$MSG" "$TITLE" "${NOTIFY_COLOR:-red}"
 fi
 
 wait

@@ -139,19 +139,36 @@ fi
 SCRIPT
   chmod +x "$MOCK_BIN/osascript"
 
-  # Mock curl — handles both version checks and relay requests
+  # Mock curl — handles version checks, relay requests, and mobile notifications
   cat > "$MOCK_BIN/curl" <<'SCRIPT'
 #!/bin/bash
-# Check if this is a relay request (devcontainer audio/notification/health)
+# Check if this is a relay request (devcontainer/SSH audio/notification/health)
 for arg in "$@"; do
-  if [[ "$arg" == *"/play?"* ]] || [[ "$arg" == *"/notify"* ]] || [[ "$arg" == *"/health"* ]]; then
+  if [[ "$arg" == *"/play?"* ]] || [[ "$arg" == *"/health"* ]]; then
     echo "RELAY: $*" >> "${CLAUDE_PEON_DIR}/relay_curl.log"
-    # Simulate relay availability based on marker file
     if [ -f "${CLAUDE_PEON_DIR}/.relay_available" ]; then
       exit 0
     else
-      exit 7  # curl exit code for connection refused
+      exit 7
     fi
+  fi
+  # Relay notify (devcontainer/SSH POST)
+  if [[ "$arg" == *"/notify"* ]] && [[ "$arg" == *"19998"* || "$arg" == *"12345"* ]]; then
+    echo "RELAY: $*" >> "${CLAUDE_PEON_DIR}/relay_curl.log"
+    exit 0
+  fi
+  # Mobile push notification services
+  if [[ "$arg" == *"ntfy.sh"* ]] || [[ "$arg" == *"ntfy/"* ]]; then
+    echo "MOBILE_NTFY: $*" >> "${CLAUDE_PEON_DIR}/mobile_curl.log"
+    exit 0
+  fi
+  if [[ "$arg" == *"api.pushover.net"* ]]; then
+    echo "MOBILE_PUSHOVER: $*" >> "${CLAUDE_PEON_DIR}/mobile_curl.log"
+    exit 0
+  fi
+  if [[ "$arg" == *"api.telegram.org"* ]]; then
+    echo "MOBILE_TELEGRAM: $*" >> "${CLAUDE_PEON_DIR}/mobile_curl.log"
+    exit 0
   fi
 done
 # Version check behavior
@@ -234,5 +251,17 @@ relay_call_count() {
     wc -l < "$TEST_DIR/relay_curl.log" | tr -d ' '
   else
     echo "0"
+  fi
+}
+
+# Helper: check if a mobile notification was sent
+mobile_was_called() {
+  [ -f "$TEST_DIR/mobile_curl.log" ] && [ -s "$TEST_DIR/mobile_curl.log" ]
+}
+
+# Helper: get the mobile notification request line
+mobile_cmdline() {
+  if [ -f "$TEST_DIR/mobile_curl.log" ]; then
+    tail -1 "$TEST_DIR/mobile_curl.log"
   fi
 }
