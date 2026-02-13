@@ -5,26 +5,19 @@ on:
     branches: [main]
     paths:
       - 'adapters/opencode/**'
-      - 'tests/peon-ping-internals.test.ts'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'tsconfig.json'
-      - 'vitest.config.ts'
       - '.github/workflows/test-opencode-adapter.yml'
   push:
     branches: [main]
     paths:
       - 'adapters/opencode/**'
-      - 'tests/peon-ping-internals.test.ts'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'tsconfig.json'
-      - 'vitest.config.ts'
       - '.github/workflows/test-opencode-adapter.yml'
 
 jobs:
   vitest:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: adapters/opencode
     steps:
       - uses: actions/checkout@v4
 
@@ -32,6 +25,7 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
+          cache-dependency-path: adapters/opencode/package-lock.json
 
       - name: Install dependencies
         run: npm ci
