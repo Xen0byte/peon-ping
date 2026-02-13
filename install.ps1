@@ -177,6 +177,25 @@ if (-not $Updating) {
     Set-Content -Path $statePath -Value "{}"
 }
 
+# --- Install helper scripts ---
+$scriptsDir = Join-Path $InstallDir "scripts"
+New-Item -ItemType Directory -Path $scriptsDir -Force | Out-Null
+
+$winPlaySource = Join-Path $PSScriptRoot "scripts\win-play.ps1"
+$winPlayTarget = Join-Path $scriptsDir "win-play.ps1"
+
+if (Test-Path $winPlaySource) {
+    # Local install: copy from repo
+    Copy-Item -Path $winPlaySource -Destination $winPlayTarget -Force
+} else {
+    # One-liner install: download from GitHub
+    try {
+        Invoke-WebRequest -Uri "$RepoBase/scripts/win-play.ps1" -OutFile $winPlayTarget -UseBasicParsing -ErrorAction Stop
+    } catch {
+        Write-Host "  Warning: Could not download win-play.ps1" -ForegroundColor Yellow
+    }
+}
+
 # --- Install the main hook script (PowerShell) ---
 $hookScript = @'
 # peon-ping hook for Claude Code (Windows native)
@@ -456,44 +475,11 @@ try {
 $volume = $config.volume
 if (-not $volume) { $volume = 0.5 }
 
-# Inline playback (no external script needed)
-$playbackScript = @"
-`$path = '$soundPath'
-`$vol = $volume
-try {
-    Add-Type -AssemblyName PresentationCore
-    `$player = New-Object System.Windows.Media.MediaPlayer
-    `$player.Open([Uri]::new("file:///`$(`$path -replace '\\\\','/')"))
-    `$player.Volume = `$vol
-    Start-Sleep -Milliseconds 150
-    `$player.Play()
-    `$timeout = 50
-    while (`$timeout -gt 0 -and `$player.Position.TotalMilliseconds -eq 0) {
-        Start-Sleep -Milliseconds 100
-        `$timeout--
-    }
-    if (`$player.NaturalDuration.HasTimeSpan) {
-        `$remaining = `$player.NaturalDuration.TimeSpan.TotalMilliseconds - `$player.Position.TotalMilliseconds
-        if (`$remaining -gt 0 -and `$remaining -lt 5000) {
-            Start-Sleep -Milliseconds ([int]`$remaining + 100)
-        }
-    } else {
-        Start-Sleep -Seconds 2
-    }
-    `$player.Close()
-} catch {
-    if (`$path -match "\.wav`$") {
-        try {
-            `$sp = New-Object System.Media.SoundPlayer `$path
-            `$sp.Play()
-            Start-Sleep -Seconds 2
-            `$sp.Dispose()
-        } catch {}
-    }
+# Use win-play.ps1 script
+$winPlayScript = Join-Path $InstallDir "scripts\win-play.ps1"
+if (Test-Path $winPlayScript) {
+    $null = Start-Process -WindowStyle Hidden -FilePath "powershell.exe" -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-File",$winPlayScript,"-path",$soundPath,"-vol",$volume
 }
-"@
-
-$null = Start-Process -WindowStyle Hidden -FilePath "powershell.exe" -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-Command",$playbackScript
 
 exit 0
 '@
@@ -653,47 +639,17 @@ $testPackDir = Join-Path $InstallDir "packs\$testPack\sounds"
 $testSound = Get-ChildItem -Path $testPackDir -File -ErrorAction SilentlyContinue | Select-Object -First 1
 
 if ($testSound) {
-    try {
-        $testPlayback = @"
-`$path = '$($testSound.FullName)'
-`$vol = 0.3
-try {
-    Add-Type -AssemblyName PresentationCore
-    `$player = New-Object System.Windows.Media.MediaPlayer
-    `$player.Open([Uri]::new("file:///`$(`$path -replace '\\\\','/')"))
-    `$player.Volume = `$vol
-    Start-Sleep -Milliseconds 150
-    `$player.Play()
-    `$timeout = 50
-    while (`$timeout -gt 0 -and `$player.Position.TotalMilliseconds -eq 0) {
-        Start-Sleep -Milliseconds 100
-        `$timeout--
-    }
-    if (`$player.NaturalDuration.HasTimeSpan) {
-        `$remaining = `$player.NaturalDuration.TimeSpan.TotalMilliseconds - `$player.Position.TotalMilliseconds
-        if (`$remaining -gt 0 -and `$remaining -lt 5000) {
-            Start-Sleep -Milliseconds ([int]`$remaining + 100)
+    $winPlayScript = Join-Path $scriptsDir "win-play.ps1"
+    if (Test-Path $winPlayScript) {
+        try {
+            $proc = Start-Process -WindowStyle Hidden -FilePath "powershell.exe" -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-File",$winPlayScript,"-path",$testSound.FullName,"-vol",0.3 -PassThru
+            Start-Sleep -Seconds 3
+            Write-Host "  Sound working!" -ForegroundColor Green
+        } catch {
+            Write-Host "  Warning: Sound playback failed: $_" -ForegroundColor Yellow
         }
     } else {
-        Start-Sleep -Seconds 2
-    }
-    `$player.Close()
-} catch {
-    if (`$path -match "\.wav`$") {
-        try {
-            `$sp = New-Object System.Media.SoundPlayer `$path
-            `$sp.Play()
-            Start-Sleep -Seconds 2
-            `$sp.Dispose()
-        } catch {}
-    }
-}
-"@
-        $proc = Start-Process -WindowStyle Hidden -FilePath "powershell.exe" -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-Command",$testPlayback -PassThru
-        Start-Sleep -Seconds 3
-        Write-Host "  Sound working!" -ForegroundColor Green
-    } catch {
-        Write-Host "  Warning: Sound playback failed: $_" -ForegroundColor Yellow
+        Write-Host "  Warning: win-play.ps1 not found" -ForegroundColor Yellow
     }
 } else {
     Write-Host "  Warning: No sound files found for pack '$testPack'" -ForegroundColor Yellow
