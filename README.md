@@ -365,7 +365,7 @@ Mobile notifications fire on every event regardless of window focus — they're 
 
 ## Sound packs
 
-43+ packs across Warcraft, StarCraft, Red Alert, Portal, Zelda, Dota 2, Helldivers 2, Elder Scrolls, and more. The default install includes 10 curated English packs:
+60+ packs across Warcraft, StarCraft, Red Alert, Portal, Zelda, Dota 2, Helldivers 2, Elder Scrolls, and more. The default install includes 10 curated English packs:
 
 | Pack | Character | Sounds |
 |---|---|---|
@@ -440,3 +440,8 @@ Sound packs are downloaded from the [OpenPeon registry](https://github.com/PeonP
 - [OpenPeon registry](https://github.com/PeonPing/registry) — pack registry (GitHub Pages)
 - [og-packs](https://github.com/PeonPing/og-packs) — official sound packs
 - [License (MIT)](LICENSE)
+
+## Support the project
+
+[removed_support_line]
+- Community Token (DYOR / have fun): Someone created a $PEON token on Base — we receive TX fees which help fund development. [`0xf4ba744229afb64e2571eef89aacec2f524e8ba3`](https://dexscreener.com/base/0xf4bA744229aFB64E2571eef89AaceC2F524e8bA3)

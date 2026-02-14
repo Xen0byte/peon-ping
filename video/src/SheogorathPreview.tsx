@@ -15,30 +15,31 @@ const TIMELINE = [
   { frame: 0, type: "title" as const },
   { frame: 75, type: "terminal-start" as const },
   { frame: 90, type: "line" as const, text: "$ claude", style: "cmd" as const },
-  { frame: 120, type: "sound-line" as const, text: '🔊 "Lieutenant Kerrigan reporting"', sound: "KerriganReporting.mp3", label: "— session started" },
-  { frame: 170, type: "line" as const, text: "> Scan the codebase for security vulns", style: "cmd" as const },
-  { frame: 210, type: "line" as const, text: "  Claude is working...", style: "dim" as const },
-  { frame: 240, type: "sound-line" as const, text: '🔊 "I gotcha"', sound: "IGotcha.mp3", label: "— reading files" },
-  { frame: 290, type: "line" as const, text: "  [you switch to browser]", style: "dim" as const },
-  { frame: 330, type: "sound-line" as const, text: '🔊 "What now?"', sound: "WhatNow.mp3", label: "— permission needed" },
-  { frame: 390, type: "line" as const, text: "  [you hear it, switch back, approve]", style: "dim" as const },
-  { frame: 430, type: "line" as const, text: "  Claude continues working...", style: "dim" as const },
-  { frame: 470, type: "sound-line" as const, text: '🔊 "Thinking the same thing"', sound: "ThinkingSameThing.mp3", label: "— analyzing" },
-  { frame: 530, type: "sound-line" as const, text: '🔊 "I\'m waiting on you"', sound: "WaitingOnYou.mp3", label: "— task complete" },
-  { frame: 580, type: "line" as const, text: "> ", style: "cursor" as const },
-  { frame: 620, type: "line" as const, text: "> Push to main without tests", style: "cmd" as const },
-  { frame: 660, type: "line" as const, text: "  Error: Tests required", style: "error" as const },
-  { frame: 680, type: "sound-line" as const, text: '🔊 [death sound]', sound: "Death1.mp3", label: "— error" },
+  { frame: 115, type: "sound-line" as const, text: '🔊 "I am Sheogorath, Prince of madness."', sound: "greeting_4.wav", label: "— session started" },
+  { frame: 200, type: "line" as const, text: "> Rewrite the state machine", style: "cmd" as const },
+  { frame: 240, type: "line" as const, text: "  Claude is working...", style: "dim" as const },
+  { frame: 265, type: "sound-line" as const, text: '🔊 "Good."', sound: "acknowledge_3.wav", label: "— reading files" },
+  { frame: 320, type: "line" as const, text: "  [you switch to Slack]", style: "dim" as const },
+  { frame: 355, type: "sound-line" as const, text: '🔊 "I\'ve been waiting for you."', sound: "permission_4.wav", label: "— permission needed" },
+  { frame: 420, type: "line" as const, text: "  [you hear it, switch back, approve]", style: "dim" as const },
+  { frame: 455, type: "line" as const, text: "  Claude continues working...", style: "dim" as const },
+  { frame: 480, type: "sound-line" as const, text: '🔊 "Cheese for everyone."', sound: "acknowledge_5.wav", label: "— analyzing code" },
+  { frame: 620, type: "sound-line" as const, text: '🔊 "Congratulations."', sound: "complete_1.wav", label: "— task complete" },
+  { frame: 660, type: "line" as const, text: "> ", style: "cursor" as const },
+  { frame: 680, type: "line" as const, text: "> Delete all the tests", style: "cmd" as const },
+  { frame: 705, type: "line" as const, text: "  Error: Are you serious?", style: "error" as const },
+  { frame: 715, type: "sound-line" as const, text: '🔊 "Boring, boring, boring."', sound: "error_2.wav", label: "— error" },
   { frame: 740, type: "outro" as const },
 ];
 
-// Zerg purple palette
+// Elder Scrolls / Daedric palette — deep purple + chaotic gold
 const BG = "#1a1b26";
 const BAR_BG = "#0c0d14";
 const GREEN = "#4ade80";
 const WC3_GOLD = "#ffab01";
 const WC3_GOLD_DIM = "rgba(255, 171, 1, 0.3)";
-const ZERG_PURPLE = "#7c3aed";
+const DAEDRIC_PURPLE = "#9b59b6";
+const MADNESS_GOLD = "#e8b923";
 const DIM = "#505a79";
 const BRIGHT = "#e0e8ff";
 
@@ -50,8 +51,14 @@ const TermLine: React.FC<{
   const { fps } = useVideoConfig();
   const localFrame = frame - appearFrame;
   if (localFrame < 0) return null;
-  const opacity = spring({ frame: localFrame, fps, config: { damping: 20 } });
+
+  const opacity = spring({
+    frame: localFrame,
+    fps,
+    config: { damping: 20 },
+  });
   const y = interpolate(opacity, [0, 1], [8, 0]);
+
   return (
     <div style={{ opacity, transform: `translateY(${y}px)`, marginBottom: 4 }}>
       {children}
@@ -59,15 +66,30 @@ const TermLine: React.FC<{
   );
 };
 
-const TypedText: React.FC<{ text: string; startFrame: number; color: string; speed?: number }> = ({ text, startFrame, color, speed = 1.5 }) => {
+const TypedText: React.FC<{
+  text: string;
+  startFrame: number;
+  color: string;
+  speed?: number;
+}> = ({ text, startFrame, color, speed = 1.5 }) => {
   const frame = useCurrentFrame();
   const elapsed = frame - startFrame;
   const charsToShow = Math.min(Math.floor(elapsed * speed), text.length);
+
   return (
     <span style={{ color }}>
       {text.slice(0, charsToShow)}
       {charsToShow < text.length && (
-        <span style={{ display: "inline-block", width: 10, height: "1.1em", backgroundColor: GREEN, verticalAlign: "text-bottom", marginLeft: 1 }} />
+        <span
+          style={{
+            display: "inline-block",
+            width: 10,
+            height: "1.1em",
+            backgroundColor: GREEN,
+            verticalAlign: "text-bottom",
+            marginLeft: 1,
+          }}
+        />
       )}
     </span>
   );
@@ -76,7 +98,17 @@ const TypedText: React.FC<{ text: string; startFrame: number; color: string; spe
 const Cursor: React.FC = () => {
   const frame = useCurrentFrame();
   const visible = Math.floor(frame / 15) % 2 === 0;
-  return <span style={{ display: "inline-block", width: 10, height: "1.1em", backgroundColor: visible ? GREEN : "transparent", verticalAlign: "text-bottom" }} />;
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        width: 10,
+        height: "1.1em",
+        backgroundColor: visible ? GREEN : "transparent",
+        verticalAlign: "text-bottom",
+      }}
+    />
+  );
 };
 
 const SoundBadge: React.FC<{ label: string }> = ({ label }) => {
@@ -84,29 +116,75 @@ const SoundBadge: React.FC<{ label: string }> = ({ label }) => {
   const { fps } = useVideoConfig();
   const enter = spring({ frame, fps, config: { damping: 12 } });
   const pulse = interpolate(Math.sin(frame * 0.3), [-1, 1], [0.8, 1]);
+
   return (
-    <span style={{ color: DIM, fontSize: 20, marginLeft: 12, opacity: enter, transform: `scale(${pulse})`, display: "inline-block" }}>
+    <span
+      style={{
+        color: DIM,
+        fontSize: 20,
+        marginLeft: 12,
+        opacity: enter,
+        transform: `scale(${pulse})`,
+        display: "inline-block",
+      }}
+    >
       {label}
     </span>
   );
 };
 
-const TerminalChrome: React.FC<{ children: React.ReactNode; tabTitle: string }> = ({ children, tabTitle }) => (
-  <div style={{ width: 940, borderRadius: 12, overflow: "hidden", border: "1px solid rgba(124,58,237,0.15)", boxShadow: "0 0 60px rgba(0,0,0,0.6), 0 0 4px rgba(124,58,237,0.1)" }}>
-    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "14px 18px", backgroundColor: BAR_BG, borderBottom: "1px solid rgba(124,58,237,0.1)" }}>
-      <div style={{ width: 14, height: 14, borderRadius: "50%", backgroundColor: "#ff5f57" }} />
-      <div style={{ width: 14, height: 14, borderRadius: "50%", backgroundColor: "#febc2e" }} />
-      <div style={{ width: 14, height: 14, borderRadius: "50%", backgroundColor: "#28c840" }} />
-      <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-        <Img src={staticFile("peon-portrait.gif")} style={{ width: 20, height: 20, borderRadius: 3, border: `1px solid ${WC3_GOLD_DIM}` }} />
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, color: DIM }}>{tabTitle}</span>
+const TerminalChrome: React.FC<{ children: React.ReactNode; tabTitle: string }> = ({
+  children,
+  tabTitle,
+}) => {
+  return (
+    <div
+      style={{
+        width: 940,
+        borderRadius: 12,
+        overflow: "hidden",
+        border: `1px solid rgba(155,89,182,0.15)`,
+        boxShadow: "0 0 60px rgba(0,0,0,0.6), 0 0 4px rgba(155,89,182,0.1)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "14px 18px",
+          backgroundColor: BAR_BG,
+          borderBottom: `1px solid rgba(155,89,182,0.1)`,
+        }}
+      >
+        <div style={{ width: 14, height: 14, borderRadius: "50%", backgroundColor: "#ff5f57" }} />
+        <div style={{ width: 14, height: 14, borderRadius: "50%", backgroundColor: "#febc2e" }} />
+        <div style={{ width: 14, height: 14, borderRadius: "50%", backgroundColor: "#28c840" }} />
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+          <Img
+            src={staticFile("peon-portrait.gif")}
+            style={{ width: 20, height: 20, borderRadius: 3, border: `1px solid ${WC3_GOLD_DIM}` }}
+          />
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, color: DIM }}>
+            {tabTitle}
+          </span>
+        </div>
+      </div>
+      <div
+        style={{
+          padding: "24px 28px",
+          backgroundColor: BG,
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 22,
+          lineHeight: 2,
+          minHeight: 500,
+        }}
+      >
+        {children}
       </div>
     </div>
-    <div style={{ padding: "24px 28px", backgroundColor: BG, fontFamily: "'JetBrains Mono', monospace", fontSize: 22, lineHeight: 2, minHeight: 500 }}>
-      {children}
-    </div>
-  </div>
-);
+  );
+};
 
 const TitleCard: React.FC = () => {
   const frame = useCurrentFrame();
@@ -119,19 +197,29 @@ const TitleCard: React.FC = () => {
 
   return (
     <AbsoluteFill style={{ backgroundColor: "#0a0a0f", justifyContent: "center", alignItems: "center", opacity: exitOp }}>
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, transparent, ${ZERG_PURPLE}, transparent)` }} />
-      <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, transparent, ${ZERG_PURPLE}, transparent)` }} />
-      <div style={{ position: "absolute", top: "50%", left: "50%", width: 600, height: 600, transform: "translate(-50%, -50%)", borderRadius: "50%", background: "radial-gradient(circle, rgba(124,58,237,0.05) 0%, transparent 70%)", pointerEvents: "none" }} />
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, transparent, ${DAEDRIC_PURPLE}, ${MADNESS_GOLD}, transparent)` }} />
+      <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, transparent, ${MADNESS_GOLD}, ${DAEDRIC_PURPLE}, transparent)` }} />
 
+      <div style={{ position: "absolute", top: "50%", left: "50%", width: 600, height: 600, transform: "translate(-50%, -50%)", borderRadius: "50%", background: "radial-gradient(circle, rgba(155,89,182,0.05) 0%, transparent 70%)", pointerEvents: "none" }} />
+
+      {/* GitHub link at top */}
       <div style={{ position: "absolute", top: 50, display: "flex", alignItems: "center", gap: 12, opacity: logoSpring, transform: `translateY(${interpolate(logoSpring, [0, 1], [10, 0])}px)` }}>
         <Img src={staticFile("peon-portrait.gif")} style={{ width: 48, height: 48, borderRadius: 6, border: `2px solid ${WC3_GOLD}`, boxShadow: "0 0 12px rgba(255,171,1,0.25)" }} />
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, color: WC3_GOLD, letterSpacing: 0.5, textShadow: "0 1px 4px rgba(0,0,0,0.6)" }}>github.com/PeonPing/peon-ping</span>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, color: WC3_GOLD, letterSpacing: 0.5, textShadow: "0 1px 4px rgba(0,0,0,0.6)" }}>
+          github.com/PeonPing/peon-ping
+        </span>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", opacity: titleSpring, transform: `translateY(${interpolate(titleSpring, [0, 1], [20, 0])}px)` }}>
-        <div style={{ fontFamily: "monospace", fontSize: 20, color: ZERG_PURPLE, letterSpacing: 6, textTransform: "uppercase", marginBottom: 16, opacity: subSpring }}>sound pack</div>
-        <div style={{ fontFamily: "Georgia, 'Palatino Linotype', serif", fontSize: 72, fontWeight: 700, color: "#fff", textShadow: "3px 3px 0 rgba(0,0,0,0.8)", textAlign: "center", lineHeight: 1.2 }}>Sarah Kerrigan</div>
-        <div style={{ fontFamily: "Georgia, serif", fontSize: 36, color: "rgba(255,255,255,0.5)", marginTop: 12, opacity: subSpring }}>StarCraft</div>
+        <div style={{ fontFamily: "monospace", fontSize: 20, color: DAEDRIC_PURPLE, letterSpacing: 6, textTransform: "uppercase", marginBottom: 16, opacity: subSpring }}>
+          sound pack
+        </div>
+        <div style={{ fontFamily: "Georgia, 'Palatino Linotype', serif", fontSize: 76, fontWeight: 700, color: "#fff", textShadow: "3px 3px 0 rgba(0,0,0,0.8)", textAlign: "center", lineHeight: 1.2 }}>
+          Sheogorath
+        </div>
+        <div style={{ fontFamily: "Georgia, serif", fontSize: 36, color: "rgba(255,255,255,0.5)", marginTop: 12, opacity: subSpring }}>
+          The Elder Scrolls
+        </div>
       </div>
 
       <div style={{ position: "absolute", bottom: 40, left: 40, display: "flex", alignItems: "center", gap: 8, opacity: subSpring }}>
@@ -155,18 +243,29 @@ const OutroCard: React.FC = () => {
 
   return (
     <AbsoluteFill style={{ backgroundColor: "#0a0a0f", justifyContent: "center", alignItems: "center" }}>
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, transparent, ${ZERG_PURPLE}, transparent)` }} />
-      <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, transparent, ${ZERG_PURPLE}, transparent)` }} />
-      <div style={{ position: "absolute", top: "40%", left: "50%", width: 500, height: 500, transform: "translate(-50%, -50%)", borderRadius: "50%", background: "radial-gradient(circle, rgba(124,58,237,0.05) 0%, transparent 70%)", pointerEvents: "none" }} />
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, transparent, ${DAEDRIC_PURPLE}, ${MADNESS_GOLD}, transparent)` }} />
+      <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, transparent, ${MADNESS_GOLD}, ${DAEDRIC_PURPLE}, transparent)` }} />
+
+      <div style={{ position: "absolute", top: "40%", left: "50%", width: 500, height: 500, transform: "translate(-50%, -50%)", borderRadius: "50%", background: "radial-gradient(circle, rgba(155,89,182,0.05) 0%, transparent 70%)", pointerEvents: "none" }} />
 
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", opacity: enter, transform: `scale(${interpolate(enter, [0, 1], [0.9, 1])})` }}>
         <div style={{ marginBottom: 30, display: "flex", alignItems: "center", gap: 14, opacity: logoEnter, transform: `translateY(${interpolate(logoEnter, [0, 1], [10, 0])}px)` }}>
           <Img src={staticFile("peon-portrait.gif")} style={{ width: 90, height: 90, borderRadius: 6, border: `2px solid ${WC3_GOLD}`, boxShadow: "0 0 12px rgba(255,171,1,0.25)" }} />
           <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 28, fontWeight: 700, color: WC3_GOLD, letterSpacing: 1, textShadow: "0 1px 4px rgba(0,0,0,0.6)" }}>peon-ping</span>
         </div>
-        <div style={{ fontFamily: "Georgia, serif", fontSize: 48, fontWeight: 600, color: "#fff", textShadow: "2px 2px 0 rgba(0,0,0,0.8)", marginBottom: 24 }}>Stop babysitting your terminal</div>
-        <div style={{ fontFamily: "monospace", fontSize: 24, color: WC3_GOLD, backgroundColor: "rgba(255,171,1,0.06)", padding: "14px 32px", borderRadius: 8, border: `1px solid ${WC3_GOLD_DIM}`, boxShadow: "0 0 20px rgba(255,171,1,0.08)" }}>github.com/PeonPing/peon-ping</div>
-        <div style={{ fontFamily: "monospace", fontSize: 18, color: "rgba(255,255,255,0.4)", marginTop: 20 }}>60+ sound packs available</div>
+
+        <div style={{ fontFamily: "Georgia, serif", fontSize: 48, fontWeight: 600, color: "#fff", textShadow: "2px 2px 0 rgba(0,0,0,0.8)", marginBottom: 24 }}>
+          Stop babysitting your terminal
+        </div>
+
+        <div style={{ fontFamily: "monospace", fontSize: 24, color: WC3_GOLD, backgroundColor: "rgba(255,171,1,0.06)", padding: "14px 32px", borderRadius: 8, border: `1px solid ${WC3_GOLD_DIM}`, boxShadow: "0 0 20px rgba(255,171,1,0.08)" }}>
+          github.com/PeonPing/peon-ping
+        </div>
+
+        <div style={{ fontFamily: "monospace", fontSize: 18, color: "rgba(255,255,255,0.4)", marginTop: 20 }}>
+          60+ sound packs available
+        </div>
+
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 16 }}>
           <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 22, fontWeight: 700, color: "rgba(255,255,255,0.5)" }}>𝕏</span>
           <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, color: "rgba(255,255,255,0.4)" }}>@PeonPing</span>
@@ -180,24 +279,27 @@ const OutroCard: React.FC = () => {
   );
 };
 
-export const KerriganPreview: React.FC = () => {
+export const SheogorathPreview: React.FC = () => {
   const frame = useCurrentFrame();
 
   let tabTitle = "my-project: ready";
-  if (frame >= 170 && frame < 530) tabTitle = "my-project: working";
-  if (frame >= 330 && frame < 390) tabTitle = "● my-project: needs approval";
-  if (frame >= 530 && frame < 620) tabTitle = "● my-project: done";
-  if (frame >= 620 && frame < 740) tabTitle = "my-project: working";
-  if (frame >= 660) tabTitle = "● my-project: error";
+  if (frame >= 200 && frame < 550) tabTitle = "my-project: working";
+  if (frame >= 355 && frame < 420) tabTitle = "● my-project: needs approval";
+  if (frame >= 620 && frame < 680) tabTitle = "● my-project: done";
+  if (frame >= 680 && frame < 740) tabTitle = "my-project: working";
+  if (frame >= 705) tabTitle = "● my-project: error";
 
   const terminalLines = TIMELINE.filter((e) => e.type !== "title" && e.type !== "terminal-start" && e.type !== "outro");
+
   const termEnter = frame >= 75;
   const termExit = frame >= 730;
   const termOp = termExit ? interpolate(frame, [730, 740], [1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }) : termEnter ? interpolate(frame, [75, 85], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }) : 0;
 
   return (
     <AbsoluteFill style={{ backgroundColor: "#0a0a0f" }}>
-      <Sequence from={0} durationInFrames={76}><TitleCard /></Sequence>
+      <Sequence from={0} durationInFrames={76}>
+        <TitleCard />
+      </Sequence>
 
       {termEnter && (
         <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", opacity: termOp }}>
@@ -207,11 +309,18 @@ export const KerriganPreview: React.FC = () => {
                 return (
                   <TermLine key={i} appearFrame={event.frame}>
                     {event.style === "cmd" ? (
-                      <TypedText text={event.text!} startFrame={event.frame} color={event.text!.startsWith("$") || event.text!.startsWith(">") ? GREEN : BRIGHT} />
+                      <TypedText
+                        text={event.text!}
+                        startFrame={event.frame}
+                        color={event.text!.startsWith("$") || event.text!.startsWith(">") ? GREEN : BRIGHT}
+                      />
                     ) : event.style === "error" ? (
-                      <span style={{ color: ZERG_PURPLE }}>{event.text}</span>
+                      <span style={{ color: DAEDRIC_PURPLE }}>{event.text}</span>
                     ) : event.style === "cursor" ? (
-                      <span><span style={{ color: GREEN }}>&gt; </span><Cursor /></span>
+                      <span>
+                        <span style={{ color: GREEN }}>&gt; </span>
+                        <Cursor />
+                      </span>
                     ) : (
                       <span style={{ color: DIM }}>{event.text}</span>
                     )}
@@ -240,12 +349,12 @@ export const KerriganPreview: React.FC = () => {
 
       {TIMELINE.filter((e) => e.type === "sound-line" && e.sound).map((event, i) => {
         const durations: Record<string, number> = {
-          "KerriganReporting.mp3": 49,
-          "IGotcha.mp3": 27,
-          "WhatNow.mp3": 28,
-          "ThinkingSameThing.mp3": 49,
-          "WaitingOnYou.mp3": 49,
-          "Death1.mp3": 75,
+          "greeting_4.wav": 180,
+          "acknowledge_3.wav": 50,
+          "permission_4.wav": 120,
+          "acknowledge_5.wav": 130,
+          "complete_1.wav": 60,
+          "error_2.wav": 125,
         };
         const dur = durations[event.sound!] ?? 50;
         return (
@@ -255,7 +364,9 @@ export const KerriganPreview: React.FC = () => {
         );
       })}
 
-      <Sequence from={740} durationInFrames={100}><OutroCard /></Sequence>
+      <Sequence from={740} durationInFrames={100}>
+        <OutroCard />
+      </Sequence>
     </AbsoluteFill>
   );
 };
