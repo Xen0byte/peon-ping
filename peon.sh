@@ -1311,6 +1311,15 @@ Mobile notifications:
   mobile status        Show mobile config
   mobile test          Send a test notification
 
+Trainer (exercise reminders):
+  trainer on           Enable trainer mode
+  trainer off          Disable trainer mode
+  trainer status       Show today's progress
+  trainer log <n> <ex> Log completed reps (e.g. log 25 pushups)
+  trainer goal <n>     Set daily goal for all exercises
+  trainer goal <ex> <n> Set daily goal for one exercise
+  trainer help         Show trainer help
+
 Relay (SSH/devcontainer/Codespaces):
   relay [--port=N]     Start audio relay on your local machine
   relay --daemon       Start relay in background
@@ -1318,6 +1327,230 @@ Relay (SSH/devcontainer/Codespaces):
   relay --status       Check if relay is running
 HELPEOF
     exit 0 ;;
+  trainer)
+    shift
+    case "${1:-help}" in
+      on)
+        python3 -c "
+import json
+config_path = '$CONFIG'
+try:
+    cfg = json.load(open(config_path))
+except Exception:
+    cfg = {}
+trainer = cfg.get('trainer', {})
+trainer['enabled'] = True
+if 'exercises' not in trainer:
+    trainer['exercises'] = {'pushups': 300, 'squats': 300}
+if 'reminder_interval_minutes' not in trainer:
+    trainer['reminder_interval_minutes'] = 20
+if 'reminder_min_gap_minutes' not in trainer:
+    trainer['reminder_min_gap_minutes'] = 5
+cfg['trainer'] = trainer
+json.dump(cfg, open(config_path, 'w'), indent=2)
+"
+        echo "peon-ping: trainer enabled"
+        exit 0 ;;
+      off)
+        python3 -c "
+import json
+config_path = '$CONFIG'
+try:
+    cfg = json.load(open(config_path))
+except Exception:
+    cfg = {}
+trainer = cfg.get('trainer', {})
+trainer['enabled'] = False
+cfg['trainer'] = trainer
+json.dump(cfg, open(config_path, 'w'), indent=2)
+"
+        echo "peon-ping: trainer disabled"
+        exit 0 ;;
+      status)
+        python3 -c "
+import json, datetime, sys
+
+config_path = '$CONFIG'
+state_path = '$STATE'
+
+try:
+    cfg = json.load(open(config_path))
+except Exception:
+    cfg = {}
+
+trainer_cfg = cfg.get('trainer', {})
+if not trainer_cfg.get('enabled', False):
+    print('peon-ping: trainer not enabled')
+    print('Run \"peon trainer on\" to enable.')
+    sys.exit(0)
+
+exercises = trainer_cfg.get('exercises', {'pushups': 300, 'squats': 300})
+
+try:
+    state = json.load(open(state_path))
+except Exception:
+    state = {}
+
+trainer_state = state.get('trainer', {})
+today = datetime.date.today().isoformat()
+
+# Auto-reset if date changed
+if trainer_state.get('date', '') != today:
+    trainer_state = {'date': today, 'reps': {k: 0 for k in exercises}, 'last_reminder_ts': 0}
+    state['trainer'] = trainer_state
+    json.dump(state, open(state_path, 'w'), indent=2)
+
+reps = trainer_state.get('reps', {})
+
+print('peon-ping: trainer status (' + today + ')')
+print('')
+
+bar_width = 16
+for ex, goal in exercises.items():
+    done = reps.get(ex, 0)
+    pct = min(done / goal, 1.0) if goal > 0 else 0
+    filled = int(pct * bar_width)
+    empty = bar_width - filled
+    bar = '\u2588' * filled + '\u2591' * empty
+    pct_str = str(int(pct * 100))
+    print(f'{ex}:  {bar}  {done}/{goal}  ({pct_str}%)')
+"
+        exit 0 ;;
+      log)
+        shift
+        COUNT="${1:-}"
+        EXERCISE="${2:-}"
+        if [ -z "$COUNT" ] || [ -z "$EXERCISE" ]; then
+          echo "Usage: peon trainer log <count> <exercise>" >&2
+          echo "Example: peon trainer log 25 pushups" >&2
+          exit 1
+        fi
+        # Validate numeric
+        case "$COUNT" in
+          ''|*[!0-9]*) echo "peon-ping: count must be a number" >&2; exit 1 ;;
+        esac
+        python3 -c "
+import json, datetime, sys
+
+config_path = '$CONFIG'
+state_path = '$STATE'
+count = int('$COUNT')
+exercise = '$EXERCISE'
+
+try:
+    cfg = json.load(open(config_path))
+except Exception:
+    cfg = {}
+
+trainer_cfg = cfg.get('trainer', {})
+exercises = trainer_cfg.get('exercises', {'pushups': 300, 'squats': 300})
+
+if exercise not in exercises:
+    print('peon-ping: unknown exercise \"' + exercise + '\"', file=sys.stderr)
+    print('Valid exercises: ' + ', '.join(exercises.keys()), file=sys.stderr)
+    sys.exit(1)
+
+goal = exercises[exercise]
+
+try:
+    state = json.load(open(state_path))
+except Exception:
+    state = {}
+
+trainer_state = state.get('trainer', {})
+today = datetime.date.today().isoformat()
+
+# Auto-reset if date changed
+if trainer_state.get('date', '') != today:
+    trainer_state = {'date': today, 'reps': {k: 0 for k in exercises}, 'last_reminder_ts': 0}
+
+reps = trainer_state.get('reps', {})
+reps[exercise] = reps.get(exercise, 0) + count
+trainer_state['reps'] = reps
+trainer_state['date'] = today
+state['trainer'] = trainer_state
+json.dump(state, open(state_path, 'w'), indent=2)
+
+done = reps[exercise]
+pct = min(done / goal, 1.0) if goal > 0 else 0
+bar_width = 16
+filled = int(pct * bar_width)
+empty = bar_width - filled
+bar = '\u2588' * filled + '\u2591' * empty
+print(f'peon-ping: logged {count} {exercise} ({done}/{goal})')
+print(f'  {bar}  {int(pct*100)}%')
+"
+        exit $? ;;
+      goal)
+        shift
+        ARG1="${1:-}"
+        ARG2="${2:-}"
+        if [ -z "$ARG1" ]; then
+          echo "Usage: peon trainer goal <number>           Set all exercises" >&2
+          echo "       peon trainer goal <exercise> <number> Set one exercise" >&2
+          exit 1
+        fi
+        python3 -c "
+import json, sys
+
+config_path = '$CONFIG'
+arg1 = '$ARG1'
+arg2 = '$ARG2'
+
+try:
+    cfg = json.load(open(config_path))
+except Exception:
+    cfg = {}
+
+trainer = cfg.get('trainer', {})
+exercises = trainer.get('exercises', {'pushups': 300, 'squats': 300})
+
+if arg2:
+    # goal <exercise> <number>
+    exercise = arg1
+    try:
+        num = int(arg2)
+    except ValueError:
+        print('peon-ping: goal must be a number', file=sys.stderr)
+        sys.exit(1)
+    if exercise not in exercises:
+        print('peon-ping: unknown exercise \"' + exercise + '\"', file=sys.stderr)
+        sys.exit(1)
+    exercises[exercise] = num
+    print(f'peon-ping: {exercise} goal set to {num}')
+else:
+    # goal <number>
+    try:
+        num = int(arg1)
+    except ValueError:
+        print('peon-ping: goal must be a number', file=sys.stderr)
+        sys.exit(1)
+    for k in exercises:
+        exercises[k] = num
+    print(f'peon-ping: all exercise goals set to {num}')
+
+trainer['exercises'] = exercises
+cfg['trainer'] = trainer
+json.dump(cfg, open(config_path, 'w'), indent=2)
+"
+        exit $? ;;
+      help|*)
+        cat <<'TRAINER_HELP'
+Usage: peon trainer <command>
+
+Commands:
+  on                   Enable trainer mode
+  off                  Disable trainer mode
+  status               Show today's progress
+  log <count> <exercise>  Log completed reps (e.g. log 25 pushups)
+  goal <number>        Set daily goal for all exercises
+  goal <exercise> <n>  Set daily goal for one exercise
+  help                 Show this help
+
+Exercises: pushups, squats
+TRAINER_HELP
+        exit 0 ;;
+    esac ;;
   --*)
     echo "Unknown option: $1" >&2
     echo "Run 'peon help' for usage." >&2; exit 1 ;;
