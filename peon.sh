@@ -342,9 +342,13 @@ TOASTEOF
             slot=$((slot + 1))
           done
           y_offset=$((40 + slot * 90))
+          # Security: pass message via temp file to avoid PowerShell injection from untrusted $msg
+          tmpmsg=$(mktemp) && printf '%s' "$msg" > "$tmpmsg"
           powershell.exe -NoProfile -NonInteractive -Command "
             Add-Type -AssemblyName System.Windows.Forms
             Add-Type -AssemblyName System.Drawing
+            \$msgPath = '$tmpmsg'
+            \$msgText = if (Test-Path \$msgPath) { (Get-Content -Raw \$msgPath) } else { '' }
             foreach (\$screen in [System.Windows.Forms.Screen]::AllScreens) {
               \$form = New-Object System.Windows.Forms.Form
               \$form.FormBorderStyle = 'None'
@@ -374,7 +378,7 @@ TOASTEOF
                 \$label = New-Object System.Windows.Forms.Label
                 \$label.Dock = 'Fill'
               }
-              \$label.Text = '$msg'
+              \$label.Text = \$msgText
               \$label.ForeColor = [System.Drawing.Color]::White
               \$label.Font = New-Object System.Drawing.Font('Segoe UI', 16, [System.Drawing.FontStyle]::Bold)
               \$label.TextAlign = 'MiddleCenter'
@@ -383,6 +387,7 @@ TOASTEOF
             }
             Start-Sleep -Seconds 4
             [System.Windows.Forms.Application]::Exit()
+            if (Test-Path \$msgPath) { Remove-Item -Force \$msgPath }
           " &>/dev/null
           rm -rf "$slot_dir/slot-$slot"
         ) &
