@@ -136,6 +136,54 @@ Four Claude Code skills live in `skills/`:
 - `/peon-ping-use <pack>` — Assign a specific pack to the current agent session (agentskill mode)
 - `/peon-ping-log <n> <exercise>` — Log exercise reps to the Peon Trainer (e.g. `/peon-ping-log 25 pushups`)
 
+## Change Enforcement Rules
+
+These are hard rules. When you make a change of type X, you MUST also do Y.
+
+### If you add/change a CESP category (e.g., `task.error`, `resource.limit`)
+→ Update `../openpeon/site/scripts/generate-pack-data.ts` FRANCHISE_MAP if any pack manifests reference new packs
+→ Update the spec at `../openpeon/site/src/app/spec/page.tsx` if the category is new to the spec
+→ Update `../openpeon/site/public/llms.txt` (openpeon.com LLM context)
+
+### If you add/change a hook event (e.g., SubagentStart, PreCompact)
+→ Update `../homebrew-tap/Formula/peon-ping.rb` — the hook registration list in Phase 4
+→ Update `README.md` — the "Supported events" section
+→ Bump version (patch or minor depending on significance)
+
+### If you add a new IDE adapter (e.g., a new `adapters/foo.sh`)
+→ Update `README.md` — supported IDEs section
+→ Update `../homebrew-tap/Formula/peon-ping.rb` — add detection/setup phase if needed
+→ Update `workspace/SOUL.md` in peonping-x-bot repo (supported tools count)
+→ Update `docs/public/llms.txt`
+→ Bump version (minor)
+
+### If you add/change a config key in `config.json`
+→ Ensure `peon.sh` backfills the new key on update (the config merge logic in `peon update`)
+→ Add a test covering the new config behavior in `tests/peon.bats`
+→ Update `README.md` configuration docs
+
+### If you add/change a CLI command (`peon <cmd>`)
+→ Update `completions.bash` and `completions.fish`
+→ Update `README.md` CLI reference section
+→ Add BATS test in `tests/peon.bats`
+
+### If you add a new sound pack to `og-packs`
+→ Bump the pack version in `openpeon.json` (1.0.0 → 1.1.0 for new categories)
+→ Ensure all required CESP categories are present: `session.start`, `task.complete`, `task.error`, `input.required`, `resource.limit`, `user.spam`
+→ Add or update the FRANCHISE_MAP entry in `../openpeon/site/scripts/generate-pack-data.ts`
+→ Add a registry entry in `../registry/index.json`
+
+### If you update `README.md` (any feature doc change)
+→ Apply the same change to `README_zh.md` (Chinese translation)
+→ Update `docs/public/llms.txt` — peonping.com LLM context file
+→ Update `../openpeon/site/public/llms.txt` if the change relates to CESP/MCP/packs
+
+### If you bump the VERSION
+→ Update `CHANGELOG.md` — add a new section at the top
+→ Tag: `git tag vX.Y.Z`
+→ Push tags: `git push --tags`
+→ Update `../homebrew-tap/Formula/peon-ping.rb` URL and SHA256 if releasing
+
 ## Documentation rules
 
 **Whenever `README.md` is updated, also update all language variants:**
