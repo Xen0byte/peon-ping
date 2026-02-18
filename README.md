@@ -281,7 +281,7 @@ peon-ping works with any agentic IDE that supports hooks. Adapters translate IDE
 |---|---|---|
 | **Claude Code** | Built-in | `curl \| bash` install handles everything |
 | **OpenAI Codex** | Adapter | Add `notify = ["bash", "/absolute/path/to/.claude/hooks/peon-ping/adapters/codex.sh"]` to `~/.codex/config.toml` |
-| **Cursor** | Adapter | Add hook entries to `~/.cursor/hooks.json` pointing to `adapters/cursor.sh` |
+| **Cursor** | Built-in | `curl \| bash` or `peon-ping-setup` auto-detects and registers Cursor hooks |
 | **OpenCode** | Adapter | `curl -fsSL https://raw.githubusercontent.com/PeonPing/peon-ping/main/adapters/opencode.sh \| bash` ([setup](#opencode-setup)) |
 | **Kilo CLI** | Adapter | `curl -fsSL https://raw.githubusercontent.com/PeonPing/peon-ping/main/adapters/kilo.sh \| bash` ([setup](#kilo-cli-setup)) |
 | **Kiro** | Adapter | Add hook entries to `~/.kiro/agents/peon-ping.json` pointing to `adapters/kiro.sh` ([setup](#kiro-setup)) |
@@ -576,7 +576,7 @@ powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\.claude\hooks\peon-pi
 
 ## How it works
 
-`peon.sh` is a Claude Code hook registered for `SessionStart`, `UserPromptSubmit`, `Stop`, `Notification`, and `PermissionRequest` events. On each event:
+`peon.sh` is a Claude Code hook registered for `SessionStart`, `SessionEnd`, `SubagentStart`, `UserPromptSubmit`, `Stop`, `Notification`, `PermissionRequest`, `PostToolUseFailure`, and `PreCompact` events. On each event:
 
 1. **Event mapping** — an embedded Python block maps the hook event to a [CESP](https://github.com/PeonPing/openpeon) sound category (`session.start`, `task.complete`, `input.required`, etc.)
 2. **Sound selection** — picks a random voice line from the active pack's manifest, avoiding repeats

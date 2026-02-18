@@ -273,7 +273,7 @@ peon-ping 适用于任何支持钩子的代理式 IDE。适配器将 IDE 特定�
 |---|---|---|
 | **Claude Code** | 内置 | `curl \| bash` 安装会自动处理 |
 | **OpenAI Codex** | 适配器 | 在 `~/.codex/config.toml` 中添加 `notify = ["bash", "/absolute/path/to/.claude/hooks/peon-ping/adapters/codex.sh"]` |
-| **Cursor** | 适配器 | 在 `~/.cursor/hooks.json` 中添加指向 `adapters/cursor.sh` 的钩子条目 |
+| **Cursor** | 内置 | `curl \| bash` 或 `peon-ping-setup` 自动检测并注册 Cursor 钩子 |
 | **OpenCode** | 适配器 | `curl -fsSL https://raw.githubusercontent.com/PeonPing/peon-ping/main/adapters/opencode.sh \| bash`（[设置](#opencode-设置)） |
 | **Kilo CLI** | 适配器 | `curl -fsSL https://raw.githubusercontent.com/PeonPing/peon-ping/main/adapters/kilo.sh \| bash`（[设置](#kilo-cli-设置)） |
 | **Kiro** | 适配器 | 在 `~/.kiro/agents/peon-ping.json` 中添加指向 `adapters/kiro.sh` 的钩子条目（[设置](#kiro-设置)） |
@@ -566,7 +566,7 @@ powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\.claude\hooks\peon-pi
 
 ## 工作原理
 
-`peon.sh` 是一个为 `SessionStart`、`UserPromptSubmit`、`Stop`、`Notification` 和 `PermissionRequest` 事件注册的 Claude Code 钩子。在每个事件：
+`peon.sh` 是一个为 `SessionStart`、`SessionEnd`、`SubagentStart`、`UserPromptSubmit`、`Stop`、`Notification`、`PermissionRequest`、`PostToolUseFailure` 和 `PreCompact` 事件注册的 Claude Code 钩子。在每个事件：
 
 1. **事件映射** — 嵌入的 Python 块将钩子事件映射到 [CESP](https://github.com/PeonPing/openpeon) 声音分类（`session.start`、`task.complete`、`input.required` 等）
 2. **声音选择** — 从活动语音包清单中随机选择一个语音，避免重复
