@@ -1,5 +1,18 @@
 # Changelog
 
+## v2.1.1 (2026-02-17)
+
+### Security
+- Pass WSL Windows Forms notification message via temp file to prevent PowerShell script injection ([#187](https://github.com/PeonPing/peon-ping/pull/187))
+
+### Added
+- macOS JXA Cocoa overlay notifications with configurable `overlay`/`standard` styles and `peon notifications` CLI ([#185](https://github.com/PeonPing/peon-ping/pull/185))
+- CESP §5.5 icon resolution chain for pack-aware notifications (sound → category → pack → icon.png → default) with path traversal protection ([#189](https://github.com/PeonPing/peon-ping/pull/189))
+
+### Fixed
+- Background relay health check on SessionStart to avoid blocking greeting sound for SSH/devcontainer users ([#190](https://github.com/PeonPing/peon-ping/pull/190))
+- OpenCode adapter `task.complete` debounce increased to 5s to prevent repeated notifications in plan mode ([#188](https://github.com/PeonPing/peon-ping/pull/188))
+
 ## v2.1.0 (2026-02-17)
 
 ### Added

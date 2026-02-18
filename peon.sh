@@ -356,7 +356,7 @@ TOASTEOF
         if [ -f "$icon_path" ]; then
           icon_win_path=$(wslpath -w "$icon_path" 2>/dev/null || true)
         fi
-        (
+        _run_forms_popup() {
           slot_dir="/tmp/peon-ping-popups"
           mkdir -p "$slot_dir"
           slot=0
@@ -416,7 +416,8 @@ TOASTEOF
             if (Test-Path \$msgPath) { Remove-Item -Force \$msgPath }
           " &>/dev/null
           rm -rf "$slot_dir/slot-$slot"
-        ) &
+        }
+        if [ "$use_bg" = true ]; then _run_forms_popup & else _run_forms_popup; fi
       fi
       ;;
     devcontainer|ssh)
