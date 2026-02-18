@@ -23,6 +23,7 @@ AI 编程助手完成任务或需要权限时不会通知你。你切换标签�
 - [快捷控制](#快捷控制)
 - [配置](#配置)
 - [Peon 教练](#peon-教练)
+- [MCP 服务器](#mcp-服务器)
 - [多 IDE 支持](#多-ide-支持)
 - [远程开发](#远程开发ssh--devcontainers--codespaces)
 - [手机通知](#手机通知)
@@ -230,6 +231,39 @@ trainer/sounds/slacking/       # 失望语音（"Peon very disappointed."）
 ```
 
 更新 `trainer/manifest.json` 来注册你的声音文件。
+
+## MCP 服务器
+
+peon-ping 包含一个 [MCP（模型上下文协议）](https://modelcontextprotocol.io/)服务器，任何兼容 MCP 的 AI 代理都可以通过工具调用直接播放声音，无需钩子。
+
+核心区别：**由代理选择声音**。代理不再在每个事件上自动播放固定声音，而是直接调用 `play_sound` 指定想要的声音——构建失败时用 `duke_nukem/SonOfABitch`，读取文件时用 `sc_kerrigan/IReadYou`。
+
+### 设置
+
+在 MCP 客户端配置中添加（Claude Desktop、Cursor 等）：
+
+```json
+{
+  "mcpServers": {
+    "peon-ping": {
+      "command": "node",
+      "args": ["/path/to/peon-ping/mcp/peon-mcp.js"]
+    }
+  }
+}
+```
+
+通过 Homebrew 安装时路径为 `$(brew --prefix peon-ping)/libexec/mcp/peon-mcp.js`。完整设置说明见 [`mcp/README.md`](mcp/README.md)。
+
+### 可用功能
+
+| 功能 | 说明 |
+|---|---|
+| **`play_sound`** | 按键名播放一个或多个声音（如 `duke_nukem/SonOfABitch`、`peon/PeonReady1`） |
+| **`peon-ping://catalog`** | 以 MCP 资源形式获取完整语音包目录——客户端预取一次，无需重复工具调用 |
+| **`peon-ping://pack/{name}`** | 获取指定语音包的详细信息和可用声音键名 |
+
+需要 Node.js 18+。由 [@tag-assistant](https://github.com/tag-assistant) 贡献。
 
 ## 多 IDE 支持
 

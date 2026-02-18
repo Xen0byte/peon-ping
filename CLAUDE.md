@@ -134,6 +134,17 @@ Two Claude Code skills live in `skills/`:
 - `/peon-ping-toggle` — Mute/unmute sounds
 - `/peon-ping-config` — Modify any peon-ping setting (volume, packs, categories, etc.)
 
+## Documentation rules
+
+**Whenever `README.md` is updated, also update all language variants:**
+- `README_zh.md` — Chinese translation (currently the only language variant)
+
+Apply the same changes in the appropriate language. If a section is added to `README.md`, add the translated equivalent to each language README in the same location.
+
+**Whenever the website or README is updated for a new feature, also update:**
+- `docs/public/llms.txt` — peonping.com LLM context file
+- `../openpeon/site/public/llms.txt` — openpeon.com LLM context file (if the feature relates to CESP/MCP/packs)
+
 ## Website
 
 `docs/` contains the static landing page ([peonping.com](https://peonping.com)), deployed via Vercel. A `vercel.json` in `docs/` provides the `/install` redirect so `curl -fsSL peonping.com/install | bash` works. `video/` is a separate Remotion project for promotional videos (React + TypeScript, independent from the main codebase).
