@@ -358,7 +358,7 @@ terminal_notifier_log() {
   cat > "$TEST_DIR/config.json" <<'JSON'
 { "active_pack": "peon", "volume": 0.5, "enabled": true, "desktop_notifications": true, "notification_style": "standard", "categories": { "task.complete": true } }
 JSON
-  run_peon '{"hook_event_name":"Stop","cwd":"/tmp/myproject","session_id":"s1","permission_mode":"default"}'
+  TERM_PROGRAM= run_peon '{"hook_event_name":"Stop","cwd":"/tmp/myproject","session_id":"s1","permission_mode":"default"}'
   [ "$PEON_EXIT" -eq 0 ]
   ! overlay_was_called
   [ -f "$TEST_DIR/terminal_notifier.log" ]

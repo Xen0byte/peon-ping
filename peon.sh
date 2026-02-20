@@ -274,6 +274,15 @@ _mac_terminal_bundle_id() {
     WarpTerminal)   echo "dev.warp.Warp-Stable" ;;
     Apple_Terminal) echo "com.apple.Terminal" ;;
     zed)            echo "dev.zed.Zed" ;;
+    vscode)
+      # IDE embedded terminal (Cursor, VS Code, Windsurf all set TERM_PROGRAM=vscode).
+      # Async hooks are orphaned from the process tree, so _mac_ide_pid() won't find
+      # the IDE. Instead, check which IDE is actually running and return its bundle ID.
+      local _bid
+      for _candidate in Cursor "Code" Windsurf; do
+        _bid=$(osascript -e "tell application \"System Events\" to get bundle identifier of first process whose name is \"$_candidate\"" 2>/dev/null) && [ -n "$_bid" ] && { echo "$_bid"; return; }
+      done
+      echo "" ;;
     *)              echo "" ;;
   esac
 }
