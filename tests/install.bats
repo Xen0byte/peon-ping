@@ -122,10 +122,14 @@ s = json.load(open('$TEST_HOME/.claude/settings.json'))
 hooks = s.get('hooks', {})
 for event in ['SessionStart', 'UserPromptSubmit', 'Stop', 'Notification', 'PermissionRequest']:
     assert event in hooks, f'{event} not in hooks'
-    # UserPromptSubmit uses hook-handle-use.sh; all others use peon.sh
-    expected = 'hook-handle-use.sh' if event == 'UserPromptSubmit' else 'peon.sh'
-    found = any(expected in h.get('command','') for entry in hooks[event] for h in entry.get('hooks',[]))
-    assert found, f'{expected} not registered for {event}'
+    # UserPromptSubmit registers BOTH peon.sh (silent_window/user.spam) AND hook-handle-use.sh (slash cmds)
+    if event == 'UserPromptSubmit':
+        cmds = [h.get('command','') for entry in hooks[event] for h in entry.get('hooks',[])]
+        assert any('peon.sh' in c for c in cmds), 'peon.sh not registered for UserPromptSubmit (breaks silent_window/user.spam)'
+        assert any('hook-handle-use' in c for c in cmds), 'hook-handle-use not registered for UserPromptSubmit'
+    else:
+        found = any('peon.sh' in h.get('command','') for entry in hooks[event] for h in entry.get('hooks',[]))
+        assert found, f'peon.sh not registered for {event}'
 print('OK')
 "
 }
@@ -211,10 +215,14 @@ s = json.load(open('$TEST_HOME/.claude/settings.json'))
 hooks = s.get('hooks', {})
 for event in ['SessionStart', 'UserPromptSubmit', 'Stop', 'Notification', 'PermissionRequest']:
     assert event in hooks, f'{event} not in hooks'
-    # UserPromptSubmit uses hook-handle-use.sh; all others use peon.sh
-    expected = 'hook-handle-use.sh' if event == 'UserPromptSubmit' else 'peon.sh'
-    found = any(expected in h.get('command','') for entry in hooks[event] for h in entry.get('hooks',[]))
-    assert found, f'{expected} not registered for {event}'
+    # UserPromptSubmit registers BOTH peon.sh (silent_window/user.spam) AND hook-handle-use.sh (slash cmds)
+    if event == 'UserPromptSubmit':
+        cmds = [h.get('command','') for entry in hooks[event] for h in entry.get('hooks',[])]
+        assert any('peon.sh' in c for c in cmds), 'peon.sh not registered for UserPromptSubmit (breaks silent_window/user.spam)'
+        assert any('hook-handle-use' in c for c in cmds), 'hook-handle-use not registered for UserPromptSubmit'
+    else:
+        found = any('peon.sh' in h.get('command','') for entry in hooks[event] for h in entry.get('hooks',[]))
+        assert found, f'peon.sh not registered for {event}'
 print('OK')
 "
 }

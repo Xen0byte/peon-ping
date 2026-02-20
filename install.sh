@@ -749,7 +749,7 @@ peon_hook_async = {
 # SessionStart runs sync so stderr messages (update notice, pause status,
 # relay guidance) appear immediately. All other events run async.
 sync_events = ('SessionStart',)
-events = ['SessionStart', 'SessionEnd', 'SubagentStart', 'Stop', 'Notification', 'PermissionRequest', 'PostToolUseFailure', 'PreCompact']
+events = ['SessionStart', 'SessionEnd', 'SubagentStart', 'UserPromptSubmit', 'Stop', 'Notification', 'PermissionRequest', 'PostToolUseFailure', 'PreCompact']
 
 # PostToolUseFailure only triggers on Bash failures — use matcher to limit scope
 bash_only_events = ('PostToolUseFailure',)
@@ -766,7 +766,7 @@ for event in events:
     event_hooks = [
         h for h in event_hooks
         if not any(
-            'notify.sh' in hk.get('command', '') or 'peon-ping/' in hk.get('command', '')
+            'notify.sh' in hk.get('command', '') or 'peon.sh' in hk.get('command', '')
             for hk in h.get('hooks', [])
         )
     ]
@@ -827,11 +827,11 @@ before_submit_entry = {
 
 # Register under UserPromptSubmit (valid Claude Code event)
 event_hooks = hooks.get('UserPromptSubmit', [])
-# Remove any existing peon-ping entries
+# Remove any existing hook-handle-use entries (keep peon.sh entries)
 event_hooks = [
     h for h in event_hooks
     if not any(
-        'peon-ping/' in hk.get('command', '')
+        'hook-handle-use' in hk.get('command', '')
         for hk in h.get('hooks', [])
     )
 ]
