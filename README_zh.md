@@ -3,7 +3,7 @@
 
 [English](README.md) | [한국어](README_ko.md) | **中文**
 
-![macOS](https://img.shields.io/badge/macOS-blue) ![WSL2](https://img.shields.io/badge/WSL2-blue) ![Linux](https://img.shields.io/badge/Linux-blue) ![Windows](https://img.shields.io/badge/Windows-blue) ![SSH](https://img.shields.io/badge/SSH-blue)
+![macOS](https://img.shields.io/badge/macOS-blue) ![WSL2](https://img.shields.io/badge/WSL2-blue) ![Linux](https://img.shields.io/badge/Linux-blue) ![Windows](https://img.shields.io/badge/Windows-blue) ![MSYS2](https://img.shields.io/badge/MSYS2-blue) ![SSH](https://img.shields.io/badge/SSH-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ![Claude Code](https://img.shields.io/badge/Claude_Code-hook-ffab01) ![Gemini CLI](https://img.shields.io/badge/Gemini_CLI-adapter-ffab01) ![GitHub Copilot](https://img.shields.io/badge/GitHub_Copilot-adapter-ffab01) ![Codex](https://img.shields.io/badge/Codex-adapter-ffab01) ![Cursor](https://img.shields.io/badge/Cursor-adapter-ffab01) ![OpenCode](https://img.shields.io/badge/OpenCode-adapter-ffab01) ![Kilo CLI](https://img.shields.io/badge/Kilo_CLI-adapter-ffab01) ![Kiro](https://img.shields.io/badge/Kiro-adapter-ffab01) ![Windsurf](https://img.shields.io/badge/Windsurf-adapter-ffab01) ![Antigravity](https://img.shields.io/badge/Antigravity-adapter-ffab01) ![OpenClaw](https://img.shields.io/badge/OpenClaw-adapter-ffab01)
@@ -97,7 +97,7 @@ cd peon-ping
 | 速率或 token 限制 | `resource.limit` | *"Zug zug."*（取决于语音包）|
 | 快速提示（10秒内3次以上）| `user.spam` | *"Me busy, leave me alone!"* |
 
-此外，还会在每个屏幕上显示**大型覆盖横幅**（macOS/WSL）和终端标签页标题（`● 项目: 完成`）——即使你在其他应用中，也能立即知道任务完成。
+此外，还会在每个屏幕上显示**大型覆盖横幅**（macOS/WSL/MSYS2）和终端标签页标题（`● 项目: 完成`）——即使你在其他应用中，也能立即知道任务完成。
 
 peon-ping 实现了 [编码事件语音包规范（CESP）](https://github.com/PeonPing/openpeon) — 这是一个任何代理式 IDE 都可以采用的编码事件声音开放标准。
 
@@ -178,8 +178,8 @@ peon-ping 在 Claude Code 中安装两个斜杠命令：
 - **volume**：0.0–1.0（适合办公室使用的音量）
 - **desktop_notifications**：`true`/`false` — 独立于声音控制桌面通知弹窗（默认：`true`）
 - **notification_style**：`"overlay"` 或 `"standard"` — 控制桌面通知显示方式（默认：`"overlay"`）
-  - **overlay**：大型醒目横幅 — macOS 上使用 JXA Cocoa 覆盖，WSL 上使用 Windows Forms 弹窗。点击覆盖层可聚焦终端（支持 Ghostty、Warp、iTerm2、Zed、Terminal.app）
-  - **standard**：系统通知 — macOS 上使用 [`terminal-notifier`](https://github.com/julienXX/terminal-notifier) / `osascript`，WSL 上使用 Windows toast。安装 `terminal-notifier`（`brew install terminal-notifier`）后，点击通知可自动聚焦终端
+  - **overlay**：大型醒目横幅 — macOS 上使用 JXA Cocoa 覆盖，WSL/MSYS2 上使用 Windows Forms 弹窗。点击覆盖层可聚焦终端（支持 Ghostty、Warp、iTerm2、Zed、Terminal.app）
+  - **standard**：系统通知 — macOS 上使用 [`terminal-notifier`](https://github.com/julienXX/terminal-notifier) / `osascript`，WSL/MSYS2 上使用 Windows toast。安装 `terminal-notifier`（`brew install terminal-notifier`）后，点击通知可自动聚焦终端
   - **wsl_toast**：`true`/`false` — 在 WSL 上使用原生 Windows toast 通知代替 Windows Forms 弹窗。Toast 不会抢占焦点并出现在操作中心。（默认：`true`）
 - **categories**：单独开关 CESP 声音分类（例如 `"session.start": false` 禁用问候声音）
 - **annoyed_threshold / annoyed_window_seconds**：在 N 秒内多少次提示触发 `user.spam` 彩蛋
@@ -703,6 +703,7 @@ powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\.claude\hooks\peon-pi
 - **macOS** — `afplay`（内置），AppleScript 用于通知
 - **Linux** — 以下之一：`pw-play`、`paplay`、`ffplay`、`mpv`、`play`（SoX）或 `aplay`；`notify-send` 用于通知
 - **Windows** — 原生 PowerShell 带 `MediaPlayer` 和 WinForms（无需 WSL），或 WSL2
+- **MSYS2 / Git Bash** — `python3`、`cygpath`（内置）；音频通过 `ffplay`/`mpv`/`play` 或 PowerShell 回退
 - **所有平台** — `python3`（原生 Windows 不需要）
 - **SSH/远程** — 远程主机上需要 `curl`
 - **IDE** — 支持钩子的 Claude Code（或通过[适配器](#多-ide-支持)的任何支持的 IDE）
@@ -713,7 +714,7 @@ powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\.claude\hooks\peon-pi
 
 1. **事件映射** — 嵌入的 Python 块将钩子事件映射到 [CESP](https://github.com/PeonPing/openpeon) 声音分类（`session.start`、`task.complete`、`input.required` 等）
 2. **声音选择** — 从活动语音包清单中随机选择一个语音，避免重复
-3. **音频播放** — 通过 `afplay`（macOS）、PowerShell `MediaPlayer`（WSL2）或 `pw-play`/`paplay`/`ffplay`/`mpv`/`aplay`（Linux）异步播放声音
+3. **音频播放** — 通过 `afplay`（macOS）、PowerShell `MediaPlayer`（WSL2/MSYS2 回退）或 `pw-play`/`paplay`/`ffplay`/`mpv`/`aplay`（Linux/MSYS2）异步播放声音
 4. **通知** — 更新终端标签页标题，如果终端未获得焦点则发送桌面通知
 5. **远程路由** — 在 SSH 会话、devcontainers 和 Codespaces 中，音频和通知请求通过 HTTP 转发到本地机器上的[中继服务器](#远程开发ssh--devcontainers--codespaces)
 

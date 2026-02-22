@@ -24,6 +24,7 @@ detect_platform() {
       else
         echo "linux"
       fi ;;
+    MSYS_NT*|MINGW*) echo "msys2" ;;
     *) echo "unknown" ;;
   esac
 }
@@ -265,6 +266,30 @@ play_sound() {
         save_sound_pid $!
       fi
       ;;
+    msys2)
+      # Try native MSYS2 players first (ffplay, mpv, play), fall back to PowerShell
+      local msys_player
+      msys_player=$(detect_linux_player "${LINUX_AUDIO_PLAYER:-}") || msys_player=""
+      if [ -n "$msys_player" ]; then
+        play_linux_sound "$file" "$vol" "$msys_player"
+        save_sound_pid $!
+      else
+        # PowerShell fallback via win-play.ps1
+        local wpath win_play_script
+        wpath=$(cygpath -w "$file")
+        win_play_script="$(find_bundled_script "win-play.ps1")" 2>/dev/null || true
+        if [ -n "$win_play_script" ]; then
+          local wscript
+          wscript=$(cygpath -w "$win_play_script")
+          if [ "${PEON_TEST:-0}" = "1" ]; then
+            powershell.exe -NoProfile -NonInteractive -File "$wscript" -path "$wpath" -vol "$vol" >/dev/null 2>&1
+          else
+            nohup powershell.exe -NoProfile -NonInteractive -File "$wscript" -path "$wpath" -vol "$vol" >/dev/null 2>&1 &
+            save_sound_pid $!
+          fi
+        fi
+      fi
+      ;;
   esac
 }
 
@@ -333,7 +358,7 @@ send_notification() {
   [ "${PEON_TEST:-0}" = "1" ] && use_bg=false
 
   case "$PLATFORM" in
-    mac|wsl|linux)
+    mac|wsl|linux|msys2)
       # Delegate to shared notify.sh script
       local notify_script
       notify_script="$(find_bundled_script "notify.sh")" 2>/dev/null || true
@@ -390,8 +415,8 @@ terminal_is_focused() {
         *) return 1 ;;
       esac
       ;;
-    wsl)
-      # Checking Windows focus from WSL adds too much latency; always notify
+    wsl|msys2)
+      # Checking Windows focus from WSL/MSYS2 adds too much latency; always notify
       return 1
       ;;
     devcontainer|ssh)

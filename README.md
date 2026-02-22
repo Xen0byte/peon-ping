@@ -3,7 +3,7 @@
 
 **English** | [한국어](README_ko.md) | [中文](README_zh.md)
 
-![macOS](https://img.shields.io/badge/macOS-blue) ![WSL2](https://img.shields.io/badge/WSL2-blue) ![Linux](https://img.shields.io/badge/Linux-blue) ![Windows](https://img.shields.io/badge/Windows-blue) ![SSH](https://img.shields.io/badge/SSH-blue)
+![macOS](https://img.shields.io/badge/macOS-blue) ![WSL2](https://img.shields.io/badge/WSL2-blue) ![Linux](https://img.shields.io/badge/Linux-blue) ![Windows](https://img.shields.io/badge/Windows-blue) ![MSYS2](https://img.shields.io/badge/MSYS2-blue) ![SSH](https://img.shields.io/badge/SSH-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ![Claude Code](https://img.shields.io/badge/Claude_Code-hook-ffab01) ![Gemini CLI](https://img.shields.io/badge/Gemini_CLI-adapter-ffab01) ![GitHub Copilot](https://img.shields.io/badge/GitHub_Copilot-adapter-ffab01) ![Codex](https://img.shields.io/badge/Codex-adapter-ffab01) ![Cursor](https://img.shields.io/badge/Cursor-adapter-ffab01) ![OpenCode](https://img.shields.io/badge/OpenCode-adapter-ffab01) ![Kilo CLI](https://img.shields.io/badge/Kilo_CLI-adapter-ffab01) ![Kiro](https://img.shields.io/badge/Kiro-adapter-ffab01) ![Windsurf](https://img.shields.io/badge/Windsurf-adapter-ffab01) ![Antigravity](https://img.shields.io/badge/Antigravity-adapter-ffab01) ![OpenClaw](https://img.shields.io/badge/OpenClaw-adapter-ffab01)
@@ -158,7 +158,7 @@ This creates `~/.openpeon/config.json` and installs specified packs automaticall
 | Rate or token limit hit | `resource.limit` | *"Zug zug."* *(pack dependent)* |
 | Rapid prompts (3+ in 10s) | `user.spam` | *"Me busy, leave me alone!"* |
 
-Plus **large overlay banners** on every screen (macOS/WSL) and terminal tab titles (`● project: done`) — you'll know something happened even if you're in another app.
+Plus **large overlay banners** on every screen (macOS/WSL/MSYS2) and terminal tab titles (`● project: done`) — you'll know something happened even if you're in another app.
 
 peon-ping implements the [Coding Event Sound Pack Specification (CESP)](https://github.com/PeonPing/openpeon) — an open standard for coding event sounds that any agentic IDE can adopt.
 
@@ -243,8 +243,8 @@ Config location depends on install mode:
 - **volume**: 0.0–1.0 (quiet enough for the office)
 - **desktop_notifications**: `true`/`false` — toggle desktop notification popups independently from sounds (default: `true`)
 - **notification_style**: `"overlay"` or `"standard"` — controls how desktop notifications appear (default: `"overlay"`)
-  - **overlay**: large, visible banners — JXA Cocoa overlay on macOS, Windows Forms popup on WSL. Clicking the overlay focuses your terminal (supports Ghostty, Warp, iTerm2, Zed, Terminal.app)
-  - **standard**: system notifications — [`terminal-notifier`](https://github.com/julienXX/terminal-notifier) / `osascript` on macOS, Windows toast on WSL. When `terminal-notifier` is installed (`brew install terminal-notifier`), clicking a standard notification focuses your terminal automatically (supports Ghostty, Warp, iTerm2, Zed, Terminal.app)
+  - **overlay**: large, visible banners — JXA Cocoa overlay on macOS, Windows Forms popup on WSL/MSYS2. Clicking the overlay focuses your terminal (supports Ghostty, Warp, iTerm2, Zed, Terminal.app)
+  - **standard**: system notifications — [`terminal-notifier`](https://github.com/julienXX/terminal-notifier) / `osascript` on macOS, Windows toast on WSL/MSYS2. When `terminal-notifier` is installed (`brew install terminal-notifier`), clicking a standard notification focuses your terminal automatically (supports Ghostty, Warp, iTerm2, Zed, Terminal.app)
 - **categories**: Toggle individual CESP sound categories on/off (e.g. `"session.start": false` to disable greeting sounds)
 - **annoyed_threshold / annoyed_window_seconds**: How many prompts in N seconds triggers the `user.spam` easter egg
 - **silent_window_seconds**: Suppress `task.complete` sounds and notifications for tasks shorter than N seconds. (e.g. `10` to only hear sounds for tasks that take longer than 10 seconds)
@@ -774,6 +774,7 @@ powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\.claude\hooks\peon-pi
 - **macOS** — `afplay` (built-in), JXA Cocoa overlay or AppleScript for notifications
 - **Linux** — one of: `pw-play`, `paplay`, `ffplay`, `mpv`, `play` (SoX), or `aplay`; `notify-send` for notifications
 - **Windows** — native PowerShell with `MediaPlayer` and WinForms (no WSL required), or WSL2
+- **MSYS2 / Git Bash** — `python3`, `cygpath` (built-in); audio via `ffplay`/`mpv`/`play` or PowerShell fallback
 - **All platforms** — `python3` (not required for native Windows)
 - **SSH/remote** — `curl` on the remote host
 - **IDE** — Claude Code with hooks support (or any supported IDE via [adapters](#multi-ide-support))
@@ -784,7 +785,7 @@ powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\.claude\hooks\peon-pi
 
 1. **Event mapping** — an embedded Python block maps the hook event to a [CESP](https://github.com/PeonPing/openpeon) sound category (`session.start`, `task.complete`, `input.required`, etc.)
 2. **Sound selection** — picks a random voice line from the active pack's manifest, avoiding repeats
-3. **Audio playback** — plays the sound asynchronously via `afplay` (macOS), PowerShell `MediaPlayer` (WSL2), or `pw-play`/`paplay`/`ffplay`/`mpv`/`aplay` (Linux)
+3. **Audio playback** — plays the sound asynchronously via `afplay` (macOS), PowerShell `MediaPlayer` (WSL2/MSYS2 fallback), or `pw-play`/`paplay`/`ffplay`/`mpv`/`aplay` (Linux/MSYS2)
 4. **Notifications** — updates the Terminal tab title and sends a desktop notification if the terminal isn't focused
 5. **Remote routing** — in SSH sessions, devcontainers, and Codespaces, audio and notification requests are forwarded over HTTP to a [relay server](#remote-development-ssh--devcontainers--codespaces) on your local machine
 

@@ -32,6 +32,7 @@ if [ -z "${PEON_PLATFORM:-}" ]; then
       else
         PEON_PLATFORM="linux"
       fi ;;
+    MSYS_NT*|MINGW*) PEON_PLATFORM="msys2" ;;
     *) PEON_PLATFORM="unknown" ;;
   esac
 fi
@@ -276,6 +277,119 @@ TOASTEOF
       else
         notify-send --urgency="$urgency" --expire-time=5000 $icon_flag "$title" "$msg" >/dev/null 2>&1
       fi
+    fi
+    ;;
+  msys2)
+    if [ "${PEON_NOTIF_STYLE:-overlay}" = "standard" ]; then
+      # Windows toast notification via PowerShell (same as WSL but uses cygpath)
+      tmpdir="${TEMP:-/tmp}"
+      # Copy icon to temp if available
+      icon_xml=""
+      if [ -f "$icon_path" ]; then
+        cp "$icon_path" "${tmpdir}/peon-ping-icon.png" 2>/dev/null
+        icon_win="${tmpdir}\\peon-ping-icon.png"
+        icon_xml="<image placement=\"appLogoOverride\" hint-crop=\"circle\" src=\"${icon_win}\" />"
+      fi
+      # Extract just the action part from msg
+      toast_body="$msg"
+      if [[ "$msg" == *" — "* ]]; then
+        toast_body="${msg##* — }"
+      fi
+      toast_title="${title#● }"
+      _escape_xml() { printf '%s' "$1" | tr -d '\000-\010\013\014\016-\037' | sed "s/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/\"/\&quot;/g; s/'/\&apos;/g"; }
+      toast_title="$(_escape_xml "$toast_title")"
+      toast_body="$(_escape_xml "$toast_body")"
+      toast_xml_file="${tmpdir}/peon-toast.xml"
+      cat > "$toast_xml_file" <<TOASTEOF
+<toast duration="short"><visual><binding template="ToastGeneric"><text>${toast_body}</text><text>${toast_title}</text>${icon_xml}</binding></visual><audio silent="true" /></toast>
+TOASTEOF
+      toast_xml_win=$(cygpath -w "$toast_xml_file")
+      _run_toast() {
+        powershell.exe -NoProfile -NonInteractive -Command "
+          [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+          [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom, ContentType = WindowsRuntime] | Out-Null
+          \$APP_ID = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe'
+          \$xml = New-Object Windows.Data.Xml.Dom.XmlDocument
+          \$xml.LoadXml((Get-Content '$toast_xml_win' -Raw -Encoding UTF8))
+          \$toast = New-Object Windows.UI.Notifications.ToastNotification \$xml
+          [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier(\$APP_ID).Show(\$toast)
+          Remove-Item '$toast_xml_win' -ErrorAction SilentlyContinue
+        " &>/dev/null
+      }
+      if [ "$use_bg" = true ]; then _run_toast & else _run_toast; fi
+    else
+      # Windows Forms overlay popup (same as WSL but uses cygpath)
+      rgb_r=180 rgb_g=0 rgb_b=0
+      case "$color" in
+        blue)   rgb_r=30  rgb_g=80  rgb_b=180 ;;
+        yellow) rgb_r=200 rgb_g=160 rgb_b=0   ;;
+        red)    rgb_r=180 rgb_g=0   rgb_b=0   ;;
+      esac
+      icon_win_path=""
+      if [ -f "$icon_path" ]; then
+        icon_win_path=$(cygpath -w "$icon_path" 2>/dev/null || true)
+      fi
+      _run_forms_popup() {
+        slot_dir="/tmp/peon-ping-popups"
+        mkdir -p "$slot_dir"
+        slot=0
+        while [ "$slot" -lt 5 ] && ! mkdir "$slot_dir/slot-$slot" 2>/dev/null; do
+          slot=$((slot + 1))
+        done
+        if [ "$slot" -ge 5 ]; then
+          find "$slot_dir" -maxdepth 1 -name 'slot-*' -mmin +1 -exec rm -rf {} + 2>/dev/null
+          slot=0; mkdir -p "$slot_dir/slot-0"
+        fi
+        y_offset=$((40 + slot * 90))
+        tmpmsg=$(mktemp) && printf '%s' "$msg" > "$tmpmsg"
+        tmpmsg_win=$(cygpath -w "$tmpmsg")
+        powershell.exe -NoProfile -NonInteractive -Command "
+          Add-Type -AssemblyName System.Windows.Forms
+          Add-Type -AssemblyName System.Drawing
+          \$msgText = if (Test-Path '$tmpmsg_win') { (Get-Content -Raw '$tmpmsg_win') } else { '' }
+          foreach (\$screen in [System.Windows.Forms.Screen]::AllScreens) {
+            \$form = New-Object System.Windows.Forms.Form
+            \$form.FormBorderStyle = 'None'
+            \$form.BackColor = [System.Drawing.Color]::FromArgb($rgb_r, $rgb_g, $rgb_b)
+            \$form.Size = New-Object System.Drawing.Size(500, 80)
+            \$form.TopMost = \$true
+            \$form.ShowInTaskbar = \$false
+            \$form.StartPosition = 'Manual'
+            \$form.Location = New-Object System.Drawing.Point(
+              (\$screen.WorkingArea.X + (\$screen.WorkingArea.Width - 500) / 2),
+              (\$screen.WorkingArea.Y + $y_offset)
+            )
+            \$iconLeft = 10
+            \$iconSize = 60
+            if ('$icon_win_path' -ne '' -and (Test-Path '$icon_win_path')) {
+              \$pb = New-Object System.Windows.Forms.PictureBox
+              \$pb.Image = [System.Drawing.Image]::FromFile('$icon_win_path')
+              \$pb.SizeMode = 'Zoom'
+              \$pb.Size = New-Object System.Drawing.Size(\$iconSize, \$iconSize)
+              \$pb.Location = New-Object System.Drawing.Point(\$iconLeft, 10)
+              \$pb.BackColor = [System.Drawing.Color]::Transparent
+              \$form.Controls.Add(\$pb)
+              \$label = New-Object System.Windows.Forms.Label
+              \$label.Location = New-Object System.Drawing.Point((\$iconLeft + \$iconSize + 5), 0)
+              \$label.Size = New-Object System.Drawing.Size((500 - \$iconLeft - \$iconSize - 15), 80)
+            } else {
+              \$label = New-Object System.Windows.Forms.Label
+              \$label.Dock = 'Fill'
+            }
+            \$label.Text = \$msgText
+            \$label.ForeColor = [System.Drawing.Color]::White
+            \$label.Font = New-Object System.Drawing.Font('Segoe UI', 16, [System.Drawing.FontStyle]::Bold)
+            \$label.TextAlign = 'MiddleCenter'
+            \$form.Controls.Add(\$label)
+            \$form.Show()
+          }
+          Start-Sleep -Seconds 4
+          [System.Windows.Forms.Application]::Exit()
+          if (Test-Path '$tmpmsg_win') { Remove-Item -Force '$tmpmsg_win' }
+        " &>/dev/null
+        rm -rf "$slot_dir/slot-$slot"
+      }
+      if [ "$use_bg" = true ]; then _run_forms_popup & else _run_forms_popup; fi
     fi
     ;;
 esac

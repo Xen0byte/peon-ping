@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.9.0 (2026-02-21)
+
+### Added
+- **MSYS2 / Git Bash platform support** — `install.sh`, `peon.sh`, and `scripts/notify.sh` now detect `MSYS_NT-*` / `MINGW*` uname strings as `"msys2"` platform. Audio plays via native players (`ffplay`, `mpv`, `play`) with PowerShell `win-play.ps1` fallback. Desktop notifications use Windows toast (standard) or Windows Forms overlay, with `cygpath -w` for path conversion.
+
 ## v2.8.0 (2026-02-20)
 
 ### Fixed

@@ -127,6 +127,7 @@ detect_platform() {
       else
         echo "linux"
       fi ;;
+    MSYS_NT*|MINGW*) echo "msys2" ;;
     *) echo "unknown" ;;
   esac
 }
@@ -148,8 +149,8 @@ else
 fi
 
 # --- Prerequisites ---
-if [ "$PLATFORM" != "mac" ] && [ "$PLATFORM" != "wsl" ] && [ "$PLATFORM" != "linux" ] && [ "$PLATFORM" != "devcontainer" ] && [ "$PLATFORM" != "ssh" ]; then
-  echo "Error: peon-ping requires macOS, Linux, WSL, SSH, or a devcontainer"
+if [ "$PLATFORM" != "mac" ] && [ "$PLATFORM" != "wsl" ] && [ "$PLATFORM" != "linux" ] && [ "$PLATFORM" != "devcontainer" ] && [ "$PLATFORM" != "ssh" ] && [ "$PLATFORM" != "msys2" ]; then
+  echo "Error: peon-ping requires macOS, Linux, WSL, MSYS2, SSH, or a devcontainer"
   exit 1
 fi
 
@@ -204,6 +205,27 @@ elif [ "$PLATFORM" = "linux" ]; then
     echo "Desktop notifications: notify-send"
   else
     echo "Warning: notify-send not found (libnotify-bin). Desktop notifications will be disabled."
+  fi
+elif [ "$PLATFORM" = "msys2" ]; then
+  if ! command -v python3 &>/dev/null; then
+    echo "Error: python3 is required"
+    exit 1
+  fi
+  if ! command -v cygpath &>/dev/null; then
+    echo "Error: cygpath is required (should be built into MSYS2/Git Bash)"
+    exit 1
+  fi
+  MSYS2_PLAYER=""
+  for cmd in ffplay mpv play; do
+    if command -v "$cmd" &>/dev/null; then
+      MSYS2_PLAYER="$cmd"
+      break
+    fi
+  done
+  if [ -n "$MSYS2_PLAYER" ]; then
+    echo "Audio player: $MSYS2_PLAYER"
+  else
+    echo "Audio: PowerShell MediaPlayer fallback (native players like ffplay/mpv preferred for lower latency)"
   fi
 fi
 
@@ -1046,6 +1068,17 @@ except Exception:
         mpv --no-video --volume=30 "$TEST_SOUND" 2>/dev/null
       elif command -v aplay &>/dev/null; then
         aplay -q "$TEST_SOUND" 2>/dev/null
+      fi
+    elif [ "$PLATFORM" = "msys2" ]; then
+      if command -v ffplay &>/dev/null; then
+        ffplay -nodisp -autoexit -volume 30 "$TEST_SOUND" 2>/dev/null
+      elif command -v mpv &>/dev/null; then
+        mpv --no-video --volume=30 "$TEST_SOUND" 2>/dev/null
+      elif command -v play &>/dev/null; then
+        play -v 0.3 "$TEST_SOUND" 2>/dev/null
+      else
+        wpath=$(cygpath -w "$TEST_SOUND")
+        powershell.exe -NoProfile -NonInteractive -File "$(cygpath -w "$INSTALL_DIR/scripts/win-play.ps1")" -path "$wpath" -vol 0.3 2>/dev/null
       fi
     fi
     echo "Sound working!"
