@@ -118,8 +118,9 @@ case "$PEON_PLATFORM" in
           slot=0; mkdir -p "$slot_dir/slot-0"
         fi
         local session_tty="${PEON_SESSION_TTY:-}"
-        # argv[5]=bundle_id, argv[6]=ide_pid, argv[7]=session_tty (iTerm2 tab focus)
-        osascript -l JavaScript "$overlay_script" "$msg" "$color" "$local_icon_arg" "$slot" "4" "$bundle_id" "$ide_pid" "$session_tty" >/dev/null 2>&1 || true
+        local subtitle="${PEON_MSG_SUBTITLE:-}"
+        # argv[5]=bundle_id, argv[6]=ide_pid, argv[7]=session_tty (window focus), argv[8]=subtitle
+        osascript -l JavaScript "$overlay_script" "$msg" "$color" "$local_icon_arg" "$slot" "4" "$bundle_id" "$ide_pid" "$session_tty" "$subtitle" >/dev/null 2>&1 || true
         rm -rf "$slot_dir/slot-$slot"
       )
       if [ "$use_bg" = true ]; then _run_overlay & else _run_overlay; fi

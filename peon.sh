@@ -411,6 +411,7 @@ send_notification() {
         fi
         export PEON_SESSION_TTY="$session_tty"
       fi
+      export PEON_MSG_SUBTITLE="${MSG_SUBTITLE:-}"
       bash "$notify_script" "$msg" "$title" "$color" "$icon_path"
       ;;
     devcontainer|ssh)
@@ -2286,8 +2287,21 @@ state['last_active'] = dict(session_id=session_id, pack=active_pack,
                             timestamp=time.time(), event=event, cwd=cwd)
 state_dirty = True
 
-# --- Project name ---
-project = cwd.rsplit('/', 1)[-1] if cwd else 'claude'
+# --- Project name (git repo name, fallback to directory name) ---
+project = ''
+if cwd:
+    try:
+        import subprocess
+        _git_remote = subprocess.check_output(
+            ['git', 'remote', 'get-url', 'origin'],
+            cwd=cwd, stderr=subprocess.DEVNULL, timeout=2
+        ).decode().strip()
+        # Extract repo name from URL (handles ssh and https)
+        project = _git_remote.rstrip('/').rsplit('/', 1)[-1].removesuffix('.git')
+    except Exception:
+        pass
+    if not project:
+        project = cwd.rsplit('/', 1)[-1]
 if not project:
     project = 'claude'
 project = re.sub(r'[^a-zA-Z0-9 ._-]', '', project)
@@ -2299,6 +2313,7 @@ marker = ''
 notify = ''
 notify_color = ''
 msg = ''
+msg_subtitle = ''
 
 if event == 'SessionStart':
     source = event_data.get('source', '')
@@ -2351,8 +2366,9 @@ elif event == 'Stop':
     if not silent:
         marker = '\u25cf '
         notify = '1'
-        notify_color = 'blue'
-        msg = project + '  \u2014  Task complete'
+        notify_color = 'green'
+        msg = project
+        msg_subtitle = ''
     else:
         category = ''
 elif event == 'Notification':
@@ -2364,8 +2380,16 @@ elif event == 'Notification':
         status = 'done'
         marker = '\u25cf '
         notify = '1'
-        notify_color = 'yellow'
-        msg = project + '  \u2014  Waiting for input'
+        notify_color = 'blue'
+        msg = project
+    elif ntype == 'elicitation_dialog':
+        category = 'input.required'
+        status = 'question'
+        marker = '\u25cf '
+        notify = '1'
+        notify_color = 'blue'
+        msg = project
+        msg_subtitle = 'Question pending'
     else:
         print('PEON_EXIT=true')
         sys.exit(0)
@@ -2374,8 +2398,10 @@ elif event == 'PermissionRequest':
     status = 'needs approval'
     marker = '\u25cf '
     notify = '1'
-    notify_color = 'red'
-    msg = project + '  \u2014  Permission needed'
+    notify_color = 'blue'
+    msg = project
+    _tool = event_data.get('tool_name', '')
+    msg_subtitle = _tool
 elif event == 'PostToolUseFailure':
     # Bash failures arrive here with error field (e.g. Exit code 1)
     tool_name = event_data.get('tool_name', '')
@@ -2398,6 +2424,10 @@ elif event == 'PreCompact':
     # Context window filling up — compaction about to start
     category = 'resource.limit'
     status = 'working'
+    marker = '\u25cf '
+    notify = '1'
+    notify_color = 'red'
+    msg = project + '  \u2014  Context compacting'
 elif event == 'SessionEnd':
     # Clean up state for this session
     for key in ('session_packs', 'prompt_timestamps', 'session_start_times', 'prompt_start_times', 'subagent_sessions'):
@@ -2587,6 +2617,7 @@ print('MARKER=' + q(marker))
 print('NOTIFY=' + q(notify))
 print('NOTIFY_COLOR=' + q(notify_color))
 print('MSG=' + q(msg))
+print('MSG_SUBTITLE=' + q(msg_subtitle))
 print('DESKTOP_NOTIF=' + ('true' if desktop_notif else 'false'))
 print('NOTIF_STYLE=' + q(cfg.get('notification_style', 'overlay')))
 print('USE_SOUND_EFFECTS_DEVICE=' + q(str(use_sound_effects_device).lower()))
