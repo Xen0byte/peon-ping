@@ -6,11 +6,11 @@
 ![macOS](https://img.shields.io/badge/macOS-blue) ![WSL2](https://img.shields.io/badge/WSL2-blue) ![Linux](https://img.shields.io/badge/Linux-blue) ![Windows](https://img.shields.io/badge/Windows-blue) ![MSYS2](https://img.shields.io/badge/MSYS2-blue) ![SSH](https://img.shields.io/badge/SSH-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-![Claude Code](https://img.shields.io/badge/Claude_Code-hook-ffab01) ![Gemini CLI](https://img.shields.io/badge/Gemini_CLI-adapter-ffab01) ![GitHub Copilot](https://img.shields.io/badge/GitHub_Copilot-adapter-ffab01) ![Codex](https://img.shields.io/badge/Codex-adapter-ffab01) ![Cursor](https://img.shields.io/badge/Cursor-adapter-ffab01) ![OpenCode](https://img.shields.io/badge/OpenCode-adapter-ffab01) ![Kilo CLI](https://img.shields.io/badge/Kilo_CLI-adapter-ffab01) ![Kiro](https://img.shields.io/badge/Kiro-adapter-ffab01) ![Windsurf](https://img.shields.io/badge/Windsurf-adapter-ffab01) ![Antigravity](https://img.shields.io/badge/Antigravity-adapter-ffab01) ![OpenClaw](https://img.shields.io/badge/OpenClaw-adapter-ffab01)
+![Claude Code](https://img.shields.io/badge/Claude_Code-hook-ffab01) ![Amp](https://img.shields.io/badge/Amp-adapter-ffab01) ![Gemini CLI](https://img.shields.io/badge/Gemini_CLI-adapter-ffab01) ![GitHub Copilot](https://img.shields.io/badge/GitHub_Copilot-adapter-ffab01) ![Codex](https://img.shields.io/badge/Codex-adapter-ffab01) ![Cursor](https://img.shields.io/badge/Cursor-adapter-ffab01) ![OpenCode](https://img.shields.io/badge/OpenCode-adapter-ffab01) ![Kilo CLI](https://img.shields.io/badge/Kilo_CLI-adapter-ffab01) ![Kiro](https://img.shields.io/badge/Kiro-adapter-ffab01) ![Windsurf](https://img.shields.io/badge/Windsurf-adapter-ffab01) ![Antigravity](https://img.shields.io/badge/Antigravity-adapter-ffab01) ![OpenClaw](https://img.shields.io/badge/OpenClaw-adapter-ffab01)
 
 **Game character voice lines + visual overlay notifications when your AI coding agent needs attention — or let the agent pick its own sound via MCP.**
 
-AI coding agents don't notify you when they finish or need permission. You tab away, lose focus, and waste 15 minutes getting back into flow. peon-ping fixes this with voice lines and bold on-screen banners from Warcraft, StarCraft, Portal, Zelda, and more — works with **Claude Code**, **GitHub Copilot**, **Codex**, **Cursor**, **OpenCode**, **Kilo CLI**, **Kiro**, **Windsurf**, **Google Antigravity**, and any MCP client.
+AI coding agents don't notify you when they finish or need permission. You tab away, lose focus, and waste 15 minutes getting back into flow. peon-ping fixes this with voice lines and bold on-screen banners from Warcraft, StarCraft, Portal, Zelda, and more — works with **Claude Code**, **Amp**, **GitHub Copilot**, **Codex**, **Cursor**, **OpenCode**, **Kilo CLI**, **Kiro**, **Windsurf**, **Google Antigravity**, and any MCP client.
 
 **See it in action** &rarr; [peonping.com](https://peonping.com/)
 
@@ -359,6 +359,7 @@ peon-ping works with any agentic IDE that supports hooks. Adapters translate IDE
 | IDE | Status | Setup |
 |---|---|---|
 | **Claude Code** | Built-in | `curl \| bash` install handles everything |
+| **Amp** | Adapter | `bash ~/.claude/hooks/peon-ping/adapters/amp.sh` (requires `fswatch`: `brew install fswatch`) ([setup](#amp-setup)) |
 | **Gemini CLI** | Adapter | Add hooks to `~/.gemini/settings.json` pointing to `adapters/gemini.sh` ([setup](#gemini-cli-setup)) |
 | **GitHub Copilot** | Adapter | Add hooks to `.github/hooks/hooks.json` pointing to `adapters/copilot.sh` ([setup](#github-copilot-setup)) |
 | **OpenAI Codex** | Adapter | Add `notify = ["bash", "/absolute/path/to/.claude/hooks/peon-ping/adapters/codex.sh"]` to `~/.codex/config.toml` |
@@ -369,6 +370,46 @@ peon-ping works with any agentic IDE that supports hooks. Adapters translate IDE
 | **Windsurf** | Adapter | Add hook entries to `~/.codeium/windsurf/hooks.json` pointing to `adapters/windsurf.sh` ([setup](#windsurf-setup)) |
 | **Google Antigravity** | Adapter | `bash ~/.claude/hooks/peon-ping/adapters/antigravity.sh` (requires `fswatch`: `brew install fswatch`) |
 | **OpenClaw** | Adapter | Call `adapters/openclaw.sh <event>` from your OpenClaw skill. Supports all CESP categories and raw Claude Code event names. |
+
+### Amp setup
+
+A filesystem watcher adapter for [Amp](https://ampcode.com) (by Sourcegraph). Amp doesn't expose event hooks like Claude Code, so this adapter watches Amp's thread files on disk and detects when the agent finishes a turn.
+
+**Setup:**
+
+1. Ensure peon-ping is installed (`curl -fsSL https://peonping.com/install | bash`)
+
+2. Install `fswatch` (macOS) or `inotify-tools` (Linux):
+
+   ```bash
+   brew install fswatch        # macOS
+   sudo apt install inotify-tools  # Linux
+   ```
+
+3. Start the watcher:
+
+   ```bash
+   bash ~/.claude/hooks/peon-ping/adapters/amp.sh        # foreground
+   bash ~/.claude/hooks/peon-ping/adapters/amp.sh &       # background
+   ```
+
+**Event mapping:**
+
+- New thread file created → Greeting sound (*"Ready to work?"*, *"Yes?"*)
+- Thread file stops updating + agent finished turn → Completion sound (*"Work, work."*, *"Job's done!"*)
+
+**How it works:**
+
+The adapter watches `~/.local/share/amp/threads/` for JSON file changes. When a thread file stops updating (1s idle timeout) and the last message is from the assistant with text content (not a pending tool call), it emits a `Stop` event — meaning the agent is done and waiting for your input.
+
+**Environment variables:**
+
+| Variable | Default | Description |
+|---|---|---|
+| `AMP_DATA_DIR` | `~/.local/share/amp` | Amp data directory |
+| `AMP_THREADS_DIR` | `$AMP_DATA_DIR/threads` | Threads directory to watch |
+| `AMP_IDLE_SECONDS` | `1` | Seconds of no changes before emitting Stop |
+| `AMP_STOP_COOLDOWN` | `10` | Minimum seconds between Stop events per thread |
 
 ### GitHub Copilot setup
 
@@ -782,7 +823,7 @@ powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\.claude\hooks\peon-pi
 - **MSYS2 / Git Bash** — `python3`, `cygpath` (built-in); audio via `ffplay`/`mpv`/`play` or PowerShell fallback
 - **All platforms** — `python3` (not required for native Windows)
 - **SSH/remote** — `curl` on the remote host
-- **IDE** — Claude Code with hooks support (or any supported IDE via [adapters](#multi-ide-support))
+- **IDE** — Claude Code with hooks support, Amp, or any supported IDE via [adapters](#multi-ide-support)
 
 ## How it works
 

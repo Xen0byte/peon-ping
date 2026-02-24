@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.10.0 (2026-02-23)
+
+### Added
+- **Amp adapter** — filesystem watcher for [Amp](https://ampcode.com) (Sourcegraph). Watches `~/.local/share/amp/threads/` for thread JSON file changes. Detects `SessionStart` (new thread) and `Stop` (agent finished turn, waiting for input) by inspecting the last message in the thread JSON. Uses the same `fswatch`/`inotifywait` + idle timer pattern as the Antigravity adapter, with an additional `thread_is_waiting()` check to confirm the agent isn't mid-tool-execution. Includes 17 BATS tests.
+
 ## v2.9.0 (2026-02-21)
 
 ### Added

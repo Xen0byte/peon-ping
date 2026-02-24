@@ -6,11 +6,11 @@
 ![macOS](https://img.shields.io/badge/macOS-blue) ![WSL2](https://img.shields.io/badge/WSL2-blue) ![Linux](https://img.shields.io/badge/Linux-blue) ![Windows](https://img.shields.io/badge/Windows-blue) ![MSYS2](https://img.shields.io/badge/MSYS2-blue) ![SSH](https://img.shields.io/badge/SSH-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-![Claude Code](https://img.shields.io/badge/Claude_Code-hook-ffab01) ![Gemini CLI](https://img.shields.io/badge/Gemini_CLI-adapter-ffab01) ![GitHub Copilot](https://img.shields.io/badge/GitHub_Copilot-adapter-ffab01) ![Codex](https://img.shields.io/badge/Codex-adapter-ffab01) ![Cursor](https://img.shields.io/badge/Cursor-adapter-ffab01) ![OpenCode](https://img.shields.io/badge/OpenCode-adapter-ffab01) ![Kilo CLI](https://img.shields.io/badge/Kilo_CLI-adapter-ffab01) ![Kiro](https://img.shields.io/badge/Kiro-adapter-ffab01) ![Windsurf](https://img.shields.io/badge/Windsurf-adapter-ffab01) ![Antigravity](https://img.shields.io/badge/Antigravity-adapter-ffab01) ![OpenClaw](https://img.shields.io/badge/OpenClaw-adapter-ffab01)
+![Claude Code](https://img.shields.io/badge/Claude_Code-hook-ffab01) ![Amp](https://img.shields.io/badge/Amp-adapter-ffab01) ![Gemini CLI](https://img.shields.io/badge/Gemini_CLI-adapter-ffab01) ![GitHub Copilot](https://img.shields.io/badge/GitHub_Copilot-adapter-ffab01) ![Codex](https://img.shields.io/badge/Codex-adapter-ffab01) ![Cursor](https://img.shields.io/badge/Cursor-adapter-ffab01) ![OpenCode](https://img.shields.io/badge/OpenCode-adapter-ffab01) ![Kilo CLI](https://img.shields.io/badge/Kilo_CLI-adapter-ffab01) ![Kiro](https://img.shields.io/badge/Kiro-adapter-ffab01) ![Windsurf](https://img.shields.io/badge/Windsurf-adapter-ffab01) ![Antigravity](https://img.shields.io/badge/Antigravity-adapter-ffab01) ![OpenClaw](https://img.shields.io/badge/OpenClaw-adapter-ffab01)
 
 **AI 코딩 에이전트가 관심을 요청할 때 게임 캐릭터 음성 + 시각 오버레이 알림을 재생하거나, MCP를 통해 에이전트가 직접 효과음을 선택할 수 있습니다.**
 
-AI 코딩 에이전트는 작업이 끝나거나 권한이 필요할 때 알려주지 않습니다. 다른 탭으로 전환했다가 집중을 잃고, 다시 몰입하는 데 15분을 허비하게 됩니다. peon-ping은 워크래프트, 스타크래프트, 포탈, 젤다 등의 게임 캐릭터 음성과 눈에 잘 띄는 화면 배너로 이 문제를 해결합니다. **Claude Code**, **GitHub Copilot**, **Codex**, **Cursor**, **OpenCode**, **Kilo CLI**, **Kiro**, **Windsurf**, **Google Antigravity** 및 모든 MCP 클라이언트를 지원합니다.
+AI 코딩 에이전트는 작업이 끝나거나 권한이 필요할 때 알려주지 않습니다. 다른 탭으로 전환했다가 집중을 잃고, 다시 몰입하는 데 15분을 허비하게 됩니다. peon-ping은 워크래프트, 스타크래프트, 포탈, 젤다 등의 게임 캐릭터 음성과 눈에 잘 띄는 화면 배너로 이 문제를 해결합니다. **Claude Code**, **Amp**, **GitHub Copilot**, **Codex**, **Cursor**, **OpenCode**, **Kilo CLI**, **Kiro**, **Windsurf**, **Google Antigravity** 및 모든 MCP 클라이언트를 지원합니다.
 
 **데모 보기** &rarr; [peonping.com](https://peonping.com/)
 
@@ -296,6 +296,7 @@ peon-ping은 훅을 지원하는 모든 에이전트 기반 IDE에서 동작합�
 | IDE | 상태 | 설정 |
 |---|---|---|
 | **Claude Code** | 내장 | `curl \| bash` 설치 시 자동 처리 |
+| **Amp** | 어댑터 | `bash ~/.claude/hooks/peon-ping/adapters/amp.sh` (`fswatch` 필요: `brew install fswatch`) ([설정](#amp-설정)) |
 | **Gemini CLI** | 어댑터 | `~/.gemini/settings.json`에 `adapters/gemini.sh` 훅 추가 ([설정](#gemini-cli-설정)) |
 | **GitHub Copilot** | 어댑터 | `.github/hooks/hooks.json`에 `adapters/copilot.sh` 훅 추가 ([설정](#github-copilot-설정)) |
 | **OpenAI Codex** | 어댑터 | `~/.codex/config.toml`에 `notify = ["bash", "/절대경로/.claude/hooks/peon-ping/adapters/codex.sh"]` 추가 |
@@ -306,6 +307,37 @@ peon-ping은 훅을 지원하는 모든 에이전트 기반 IDE에서 동작합�
 | **Windsurf** | 어댑터 | `~/.codeium/windsurf/hooks.json`에 `adapters/windsurf.sh` 훅 추가 ([설정](#windsurf-설정)) |
 | **Google Antigravity** | 어댑터 | `bash ~/.claude/hooks/peon-ping/adapters/antigravity.sh` (`fswatch` 필요: `brew install fswatch`) |
 | **OpenClaw** | 어댑터 | OpenClaw 스킬에서 `adapters/openclaw.sh <event>` 호출. 모든 CESP 카테고리와 Claude Code 이벤트명 지원. |
+
+### Amp 설정
+
+[Amp](https://ampcode.com) (Sourcegraph)용 파일 시스템 감시 어댑터입니다. Amp는 Claude Code처럼 이벤트 훅을 제공하지 않으므로, 이 어댑터는 Amp의 스레드 파일을 감시하여 에이전트가 턴을 완료한 시점을 감지합니다.
+
+**설정 방법:**
+
+1. peon-ping이 설치되어 있는지 확인 (`curl -fsSL https://peonping.com/install | bash`)
+
+2. `fswatch` (macOS) 또는 `inotify-tools` (Linux) 설치:
+
+   ```bash
+   brew install fswatch        # macOS
+   sudo apt install inotify-tools  # Linux
+   ```
+
+3. 감시기 시작:
+
+   ```bash
+   bash ~/.claude/hooks/peon-ping/adapters/amp.sh        # 포그라운드
+   bash ~/.claude/hooks/peon-ping/adapters/amp.sh &       # 백그라운드
+   ```
+
+**이벤트 매핑:**
+
+- 새 스레드 파일 생성 → 인사 효과음 (*"Ready to work?"*, *"Yes?"*)
+- 스레드 파일 업데이트 중단 + 에이전트 턴 완료 → 완료 효과음 (*"Work, work."*, *"Job's done!"*)
+
+**작동 원리:**
+
+어댑터는 `~/.local/share/amp/threads/` 디렉토리의 JSON 파일 변경을 감시합니다. 스레드 파일이 업데이트를 멈추고 (1초 유휴 타임아웃) 마지막 메시지가 텍스트 콘텐츠를 가진 어시스턴트의 것일 때 (대기 중인 도구 호출이 아닌 경우), `Stop` 이벤트를 발생시킵니다 — 에이전트가 완료되어 사용자의 입력을 기다리고 있음을 의미합니다.
 
 ### GitHub Copilot 설정
 
