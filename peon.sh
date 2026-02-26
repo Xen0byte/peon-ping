@@ -802,12 +802,14 @@ case "${1:-}" in
     # Run headphone detection in bash before Python
     _headphones_detected=true
     detect_headphones || _headphones_detected=false
+    _verbose_flag="${2:-}"
     python3 -c "
-import json, os
+import json, os, sys
 
 config_path = os.environ.get('PEON_ENV_CONFIG', '')
 peon_dir = os.environ.get('PEON_ENV_PEON_DIR', '')
 headphones_detected = '$_headphones_detected' == 'true'
+verbose = '$_verbose_flag' == '--verbose'
 
 # --- Config ---
 try:
@@ -816,7 +818,11 @@ except Exception:
     c = {}
 
 dn = c.get('desktop_notifications', True)
-print('peon-ping: desktop notifications ' + ('on' if dn else 'off'))
+if verbose:
+    dn_status = 'on' if dn else 'off (sounds still play)'
+    print('peon-ping: desktop notifications ' + dn_status)
+else:
+    print('peon-ping: desktop notifications ' + ('on' if dn else 'off'))
 ns = c.get('notification_style', 'overlay')
 print('peon-ping: notification style ' + ns)
 
@@ -824,7 +830,11 @@ mn = c.get('mobile_notify', {})
 if mn and mn.get('service'):
     enabled = mn.get('enabled', True)
     svc = mn.get('service', '?')
-    print(f'peon-ping: mobile notifications ' + ('on' if enabled else 'off') + f' ({svc})')
+    if verbose:
+        mobile_status = 'on' if enabled else 'off'
+        print(f'peon-ping: mobile notifications {mobile_status} ({svc})')
+    else:
+        print(f'peon-ping: mobile notifications ' + ('on' if enabled else 'off') + f' ({svc})')
 else:
     print('peon-ping: mobile notifications not configured')
 
@@ -995,6 +1005,39 @@ print('NOTIF_STYLE=' + q(ns))
         exit 0 ;;
       *)
         echo "Usage: peon notifications <on|off|overlay|standard|test>" >&2; exit 1 ;;
+    esac ;;
+  popups)
+    # Alias for 'notifications' command - same behavior
+    case "${2:-}" in
+      on)
+        python3 -c "
+import json, os
+config_path = os.environ.get('PEON_ENV_CONFIG', '')
+try:
+    cfg = json.load(open(config_path))
+except Exception:
+    cfg = {}
+cfg['desktop_notifications'] = True
+json.dump(cfg, open(config_path, 'w'), indent=2)
+print('peon-ping: desktop notifications on')
+"
+        sync_adapter_configs; exit 0 ;;
+      off)
+        python3 -c "
+import json, os
+config_path = os.environ.get('PEON_ENV_CONFIG', '')
+try:
+    cfg = json.load(open(config_path))
+except Exception:
+    cfg = {}
+cfg['desktop_notifications'] = False
+json.dump(cfg, open(config_path, 'w'), indent=2)
+print('peon-ping: desktop notifications off')
+"
+        sync_adapter_configs; exit 0 ;;
+      *)
+        echo "Usage: peon popups on|off" >&2
+        exit 1 ;;
     esac ;;
   volume)
     VOL_ARG="${2:-}"
@@ -1907,11 +1950,12 @@ Commands:
   status               Check if paused or active
   volume [0.0-1.0]     Get or set volume level
   rotation [mode]      Get or set pack rotation mode (random|round-robin|session_override)
-  notifications on        Enable desktop notifications
-  notifications off       Disable desktop notifications
+  notifications on        Enable desktop notification popups (sounds continue playing)
+  notifications off       Disable desktop notification popups (sounds continue playing)
   notifications overlay   Use large overlay banners (default)
   notifications standard  Use standard system notifications
   notifications test      Send a test notification
+  popups on|off         Alias for 'notifications' - toggle desktop notification popups
   preview [category]   Play all sounds from a category (default: session.start)
   preview --list       List all categories and sound counts in the active pack
                        Categories: session.start, task.acknowledge, task.complete,

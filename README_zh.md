@@ -175,8 +175,23 @@ peon-ping 在 Claude Code 中安装两个斜杠命令：
 }
 ```
 
+### 独立控制
+
+peon-ping 有三个独立的控制开关，可以混合使用：
+
+| 配置键 | 控制项 | 影响声音 | 影响桌面弹窗 | 影响手机推送 |
+|--------|--------|----------|--------------|--------------|
+| `enabled` | 主音频开关 | ✅ 是 | ❌ 否 | ❌ 否 |
+| `desktop_notifications` | 桌面弹窗横幅 | ❌ 否 | ✅ 是 | ❌ 否 |
+| `mobile_notify.enabled` | 手机推送通知 | ❌ 否 | ❌ 否 | ✅ 是 |
+
+这意味着您可以：
+- 保留声音但禁用桌面弹窗：`peon notifications off`
+- 保留桌面弹窗但禁用声音：`peon pause`
+- 启用手机推送但不显示桌面弹窗：设置 `desktop_notifications: false` 和 `mobile_notify.enabled: true`
+
 - **volume**：0.0–1.0（适合办公室使用的音量）
-- **desktop_notifications**：`true`/`false` — 独立于声音控制桌面通知弹窗（默认：`true`）
+- **desktop_notifications**：`true`/`false` — 独立于声音控制桌面通知弹窗（默认：`true`）。禁用时，声音继续播放但视觉弹窗被抑制。手机通知不受影响。
 - **notification_style**：`"overlay"` 或 `"standard"` — 控制桌面通知显示方式（默认：`"overlay"`）
   - **overlay**：大型醒目横幅 — macOS 上使用 JXA Cocoa 覆盖，WSL/MSYS2 上使用 Windows Forms 弹窗。点击覆盖层可聚焦终端（支持 Ghostty、Warp、iTerm2、Zed、Terminal.app）。在 iTerm2 上，点击可聚焦到正确的标签页/窗格/窗口。
   - **standard**：系统通知 — macOS 上使用 [`terminal-notifier`](https://github.com/julienXX/terminal-notifier) / `osascript`，WSL/MSYS2 上使用 Windows toast。安装 `terminal-notifier`（`brew install terminal-notifier`）后，点击通知可自动聚焦终端
@@ -197,6 +212,44 @@ peon-ping 在 Claude Code 中安装两个斜杠命令：
 - **session_ttl_days**（数字，默认：7）：使超过 N 天的陈旧每会话语音包分配过期。防止使用 `session_override` 模式时 `.state.json` 无限增长。
 - **headphones_only**（布尔值，默认：`false`）：仅在检测到耳机或外部音频设备时播放声音。启用后，如果内置扬声器是活动输出，声音将被静音 — 适用于开放式办公室。使用 `peon status` 查看状态。支持 macOS（通过 `system_profiler`）和 Linux（通过 PipeWire `wpctl` 或 PulseAudio `pactl`）。
 - **suppress_sound_when_tab_focused**（布尔值，默认：`false`）：当生成钩子事件的终端标签页处于当前活动/聚焦状态时，跳过声音播放。声音仍会在后台标签页中播放，提醒您其他地方发生了事件。桌面和移动通知不受影响。适用于只想在未查看的标签页中听到音频提示的用户。仅支持 macOS（使用 `osascript` 检查最前端应用和 iTerm2 标签页焦点）。
+
+## 常见用例
+
+### 保留声音但禁用弹窗
+
+想要语音反馈但不想要视觉干扰？
+
+```bash
+peon notifications off
+```
+
+这会保持所有声音类别的播放，同时禁用桌面通知横幅。手机通知（如果已配置）继续工作。
+
+您也可以使用别名：
+
+```bash
+peon popups off
+```
+
+### 静音模式但保留通知
+
+想要视觉提醒但不要音频？
+
+```bash
+peon pause  # 或在配置中设置 "enabled": false
+```
+
+当 `desktop_notifications: true` 时，您将收到弹窗但没有声音。
+
+### 完全静音
+
+禁用所有功能：
+
+```bash
+peon pause
+peon notifications off
+peon mobile off
+```
 
 ## Peon 教练
 

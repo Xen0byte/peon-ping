@@ -102,6 +102,24 @@ Config file: `~/.claude/hooks/peon-ping/config.json`
 
 Key settings: volume, categories (per-event toggles), default_pack (replaces active_pack), path_rules (glob-based per-repo pack assignment), pack_rotation, pack_rotation_mode, desktop_notifications, silent_window_seconds, session_start_cooldown_seconds (dedup greeting sounds when many workspaces open at once; default 30s), headphones_only (mute when no headphones detected), suppress_sound_when_tab_focused (skip sound when the generating tab is focused).
 
+## Common Use Cases
+
+Sounds without popups:
+- User wants voice feedback but no visual distractions
+- Solution: peon notifications off
+- Result: Sounds play, desktop popups suppressed, mobile notifications continue
+- Config: desktop_notifications: false
+
+Silent mode with notifications only:
+- User wants visual alerts but no audio
+- Solution: peon pause (or enabled: false in config)
+- Result: Desktop popups show, no sounds play
+
+Independent Controls:
+- enabled: master audio switch (affects sounds only)
+- desktop_notifications: desktop popup banners (affects popups only)
+- mobile_notify.enabled: phone push notifications (affects mobile only)
+
 ## CLI Commands
 
 ```bash

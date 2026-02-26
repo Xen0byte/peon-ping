@@ -240,8 +240,23 @@ Config location depends on install mode:
 }
 ```
 
+### Independent Controls
+
+peon-ping has three independent controls that can be mixed and matched:
+
+| Config Key | Controls | Affects Sounds | Affects Desktop Popups | Affects Mobile Push |
+|------------|----------|----------------|------------------------|---------------------|
+| `enabled` | Master audio switch | ✅ Yes | ❌ No | ❌ No |
+| `desktop_notifications` | Desktop popup banners | ❌ No | ✅ Yes | ❌ No |
+| `mobile_notify.enabled` | Phone push notifications | ❌ No | ❌ No | ✅ Yes |
+
+This means you can:
+- Keep sounds but disable desktop popups: `peon notifications off`
+- Keep desktop popups but disable sounds: `peon pause`
+- Enable mobile push without desktop popups: set `desktop_notifications: false` and `mobile_notify.enabled: true`
+
 - **volume**: 0.0–1.0 (quiet enough for the office)
-- **desktop_notifications**: `true`/`false` — toggle desktop notification popups independently from sounds (default: `true`)
+- **desktop_notifications**: `true`/`false` — toggle desktop notification popups independently from sounds (default: `true`). When disabled, sounds continue playing but visual popups are suppressed. Mobile notifications are unaffected.
 - **notification_style**: `"overlay"` or `"standard"` — controls how desktop notifications appear (default: `"overlay"`)
   - **overlay**: large, visible banners — JXA Cocoa overlay on macOS, Windows Forms popup on WSL/MSYS2. Clicking the overlay focuses your terminal (supports Ghostty, Warp, iTerm2, Zed, Terminal.app). On iTerm2, clicking focuses the correct tab/pane/window — not just the app.
   - **standard**: system notifications — [`terminal-notifier`](https://github.com/julienXX/terminal-notifier) / `osascript` on macOS, Windows toast on WSL/MSYS2. When `terminal-notifier` is installed (`brew install terminal-notifier`), clicking a standard notification focuses your terminal automatically (supports Ghostty, Warp, iTerm2, Zed, Terminal.app)
@@ -268,6 +283,44 @@ Config location depends on install mode:
 - **headphones_only** (boolean, default: `false`): Only play sounds when headphones or external audio devices are detected. When enabled, sounds are suppressed if built-in speakers are the active output — useful for open offices. Check status with `peon status`. Supported on macOS (via `system_profiler`) and Linux (via PipeWire `wpctl` or PulseAudio `pactl`).
 - **suppress_sound_when_tab_focused** (boolean, default: `false`): Skip sound playback when the terminal tab that generated the hook event is the currently active/focused tab. Sounds still play for background tabs as an alert that something happened elsewhere. Desktop and mobile notifications are unaffected. Useful when you only want audio cues from tabs you're not watching. macOS only (uses `osascript` to check frontmost app and iTerm2 tab focus).
 - **meeting_detect** Detects if the microphone is currently being used and temporarily suppresses the audio only until the microphone is no longer in use. Notification still appears.
+
+## Common Use Cases
+
+### Sounds without popups
+
+Want voice feedback but no visual distractions?
+
+```bash
+peon notifications off
+```
+
+This keeps all sound categories playing while suppressing desktop notification banners. Mobile notifications (if configured) continue working.
+
+You can also use the alias:
+
+```bash
+peon popups off
+```
+
+### Silent mode with notifications only
+
+Want visual alerts but no audio?
+
+```bash
+peon pause  # or set "enabled": false in config
+```
+
+With `desktop_notifications: true`, you'll get popups but no sounds.
+
+### Complete silence
+
+Disable everything:
+
+```bash
+peon pause
+peon notifications off
+peon mobile off
+```
 
 ## Peon Trainer
 
