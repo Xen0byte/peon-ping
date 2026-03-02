@@ -340,5 +340,11 @@
     "date": "2026-03-01",
     "platform": "x",
     "video": "video/out/silicon-valley-preview.mp4"
+  },
+  {
+    "pack": "hal_2001",
+    "date": "2026-03-01",
+    "platform": "x",
+    "video": "video/out/hal9000-preview.mp4"
   }
 ]
