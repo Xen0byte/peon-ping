@@ -158,6 +158,7 @@ export PEON_ENV_CONFIG="$CONFIG_PY"
 export PEON_ENV_GLOBAL_CONFIG="$GLOBAL_CONFIG_PY"
 export PEON_ENV_STATE="$STATE_PY"
 export PEON_ENV_PEON_DIR="$PEON_DIR_PY"
+export PEON_ENV_PLATFORM="$PLATFORM"
 
 # --- Safe eval: only allow lines matching VAR=value (defense-in-depth for Python output) ---
 safe_eval_python() {
@@ -3259,6 +3260,24 @@ if trainer_cfg.get('enabled', False):
 if state_dirty:
     os.makedirs(os.path.dirname(state_file) or '.', exist_ok=True)
     json.dump(state, open(state_file, 'w'))
+    # --- Relay state push (SSH / devcontainer) ---
+    _relay_platform = os.environ.get('PEON_ENV_PLATFORM', '')
+    if _relay_platform in ('ssh', 'devcontainer') and state.get('last_active'):
+        import urllib.request as _ureq
+        _relay_host = os.environ.get('PEON_RELAY_HOST',
+            'host.docker.internal' if _relay_platform == 'devcontainer' else 'localhost')
+        _relay_port = os.environ.get('PEON_RELAY_PORT', '19998')
+        try:
+            _body = json.dumps({'last_active': state['last_active']}).encode()
+            _req = _ureq.Request(
+                f'http://{_relay_host}:{_relay_port}/state',
+                data=_body,
+                headers={'Content-Type': 'application/json'},
+                method='POST',
+            )
+            _ureq.urlopen(_req, timeout=1)
+        except Exception:
+            pass
 
 # --- iTerm2 tab color mapping ---
 # Configurable via config.json: tab_color.enabled (default true),

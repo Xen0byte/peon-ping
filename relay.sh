@@ -502,6 +502,29 @@ class RelayHandler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/state":
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 0:
+                try:
+                    body = json.loads(self.rfile.read(length))
+                except (json.JSONDecodeError, ValueError):
+                    self.send_error(400, "Invalid JSON")
+                    return
+            else:
+                self.send_error(400, "Missing body")
+                return
+            last_active = body.get("last_active")
+            if not isinstance(last_active, dict) or "timestamp" not in last_active:
+                self.send_error(400, "Invalid last_active")
+                return
+            state = load_state()
+            state["last_active"] = last_active
+            save_state(state)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"OK")
+            return
         if parsed.path != "/notify":
             self.send_error(404)
             return
