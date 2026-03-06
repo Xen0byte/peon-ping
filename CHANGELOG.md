@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.14.0 (2026-03-06)
+
+### Added
+- **Configurable SSH audio routing** (`peon ssh-audio [relay|auto|local]`) — choose how audio is routed in SSH sessions. `relay` (default) preserves existing behavior; `auto` tries relay then falls back to local playback on the SSH host; `local` always plays on the SSH host. Closes #206.
+
+### Fixed
+- **Nix/Home Manager: cursor adapter lookup** — `adapters/cursor.sh` now resolves `peon.sh` via a priority chain (`PEON_DIR` → `CLAUDE_PEON_DIR` → `$CLAUDE_CONFIG_DIR/hooks/peon-ping` → `$HOME/.openpeon`) instead of hardcoding `~/.claude`. Fixes Cursor in Nix installs.
+- **Nix/Home Manager: reproducible pack installation** — sound packs now installed directly from the `og-packs` repo at a pinned version instead of a non-reproducible activation script.
+- **Nix/Home Manager: hook setup documentation** — README now shows how to wire up IDE hooks manually in the Nix context; the HM module no longer attempts to manage hook files to avoid config conflicts. Closes #302.
+
 ## v2.13.1 (2026-03-05)
 
 ### Fixed
