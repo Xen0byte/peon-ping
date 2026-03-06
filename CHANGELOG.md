@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.15.0 (2026-03-06)
+
+### Added
+- **`peon packs rotation clear`** — new subcommand to zero out the pack rotation in a single command. Sets `pack_rotation` to `[]` in config.json and syncs adapter configs. Closes #321.
+
+
 ## v2.14.0 (2026-03-06)
 
 ### Added
