@@ -336,6 +336,57 @@ function Get-ActivePack($config) {
     return "peon"
 }
 
+# Install a pack from the registry by name. Returns $true on success, $false on failure.
+function Install-PackFromRegistry {
+    param([string]$PackName, [string]$PacksDir)
+    $regUrl = "https://peonping.github.io/registry/index.json"
+    try {
+        $regResp = Invoke-WebRequest -Uri $regUrl -UseBasicParsing -ErrorAction Stop
+        $reg = $regResp.Content | ConvertFrom-Json
+    } catch {
+        Write-Host "Error: could not fetch registry." -ForegroundColor Red
+        return $false
+    }
+    $packInfo = $reg.packs | Where-Object { $_.name -eq $PackName }
+    if (-not $packInfo) { return $false }
+    $srcRepo = $packInfo.source_repo
+    $srcRef = $packInfo.source_ref
+    $srcPath = $packInfo.source_path
+    if (-not $srcRepo -or -not $srcRef -or ($null -eq $srcPath)) {
+        Write-Host "Error: incomplete registry entry for '$PackName'." -ForegroundColor Red
+        return $false
+    }
+    $packBase = if ($srcPath) { "https://raw.githubusercontent.com/$srcRepo/$srcRef/$srcPath" } else { "https://raw.githubusercontent.com/$srcRepo/$srcRef" }
+    $pDir = Join-Path $PacksDir $PackName
+    $sDir = Join-Path $pDir "sounds"
+    New-Item -ItemType Directory -Path $sDir -Force | Out-Null
+    try {
+        Invoke-WebRequest -Uri "$packBase/openpeon.json" -OutFile (Join-Path $pDir "openpeon.json") -UseBasicParsing -ErrorAction Stop
+    } catch {
+        Write-Host "Error: could not download manifest for '$PackName'." -ForegroundColor Red
+        return $false
+    }
+    $mf = Get-Content (Join-Path $pDir "openpeon.json") -Raw | ConvertFrom-Json
+    $total = 0
+    $downloaded = 0
+    foreach ($catN in $mf.categories.PSObject.Properties.Name) {
+        $total += $mf.categories.$catN.sounds.Count
+    }
+    foreach ($catN in $mf.categories.PSObject.Properties.Name) {
+        foreach ($snd in $mf.categories.$catN.sounds) {
+            $sf = Split-Path $snd.file -Leaf
+            $sp = Join-Path $sDir $sf
+            $downloaded++
+            if (-not (Test-Path $sp)) {
+                Write-Host "`r[$PackName] $downloaded/$total downloading..." -NoNewline
+                Invoke-WebRequest -Uri "$packBase/sounds/$sf" -OutFile $sp -UseBasicParsing -ErrorAction SilentlyContinue
+            }
+        }
+    }
+    Write-Host "`r[$PackName] $total/$total done.          "
+    return $true
+}
+
 # --- CLI commands ---
 if ($Command) {
     $InstallDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -416,14 +467,20 @@ if ($Command) {
                     }
                     $newPack = $Arg2
                     if ($newPack -notin $available) {
-                        Write-Host "Pack '$newPack' not found. Available: $($available -join ', ')" -ForegroundColor Red
-                        return
+                        Write-Host "Pack '$newPack' not installed locally. Fetching from registry..." -ForegroundColor Yellow
+                        $ok = Install-PackFromRegistry -PackName $newPack -PacksDir $packsDir
+                        if (-not $ok) {
+                            Write-Host "Pack '$newPack' not found in registry." -ForegroundColor Red
+                            return
+                        }
+                        Write-Host "peon-ping: installed and switched to '$newPack'" -ForegroundColor Green
+                    } else {
+                        Write-Host "peon-ping: switched to '$newPack'" -ForegroundColor Green
                     }
                     $raw = Get-Content $ConfigPath -Raw
                     $updated = $raw -replace '"default_pack"\s*:\s*"[^"]*"', "`"default_pack`": `"$newPack`""
                     $updated = $updated -replace '"active_pack"\s*:\s*"[^"]*"', "`"active_pack`": `"$newPack`""
                     if ($updated -ne $raw) { Set-Content $ConfigPath -Value $updated -Encoding UTF8 }
-                    Write-Host "peon-ping: switched to '$newPack'" -ForegroundColor Green
                     return
                 }
                 "next" {
@@ -637,6 +694,101 @@ if ($Command) {
                     }
                     return
                 }
+                "community" {
+                    $regUrl = "https://peonping.github.io/registry/index.json"
+                    try {
+                        $regResp = Invoke-WebRequest -Uri $regUrl -UseBasicParsing -ErrorAction Stop
+                        $reg = $regResp.Content | ConvertFrom-Json
+                    } catch {
+                        Write-Host "Error: could not fetch registry." -ForegroundColor Red
+                        return
+                    }
+                    $packs = $reg.packs
+                    Write-Host ""
+                    Write-Host "  Registry packs ($($packs.Count) available)" -ForegroundColor Cyan
+                    Write-Host ""
+                    $grouped = @{}
+                    foreach ($p in $packs) {
+                        $tier = if ($p.trust_tier) { $p.trust_tier } else { "unknown" }
+                        if (-not $grouped.ContainsKey($tier)) { $grouped[$tier] = @() }
+                        $grouped[$tier] += $p
+                    }
+                    $maxName = ($packs | ForEach-Object { $_.name.Length } | Measure-Object -Maximum).Maximum
+                    $nameWidth = [Math]::Max($maxName + 2, 24)
+                    # Show official first, then community, then others
+                    $tierOrder = @("official") + @($grouped.Keys | Where-Object { $_ -ne "official" } | Sort-Object)
+                    foreach ($tier in $tierOrder) {
+                        if (-not $grouped.ContainsKey($tier)) { continue }
+                        $tierPacks = @($grouped[$tier] | Sort-Object { $_.name })
+                        $tierLabel = (Get-Culture).TextInfo.ToTitleCase($tier)
+                        $installedInTier = @($tierPacks | Where-Object { $_.name -in $available }).Count
+                        $tierInfo = "$($tierPacks.Count) packs"
+                        if ($installedInTier -gt 0) { $tierInfo += ", $installedInTier installed" }
+                        Write-Host "  --- $tierLabel ($tierInfo) ---" -ForegroundColor DarkGray
+                        foreach ($p in $tierPacks) {
+                            $isInstalled = $p.name -in $available
+                            $soundStr = if ($p.sound_count) { "$($p.sound_count)".PadLeft(4) } else { "   ?" }
+                            $displayName = if ($p.display_name) { $p.display_name } else { "" }
+                            if ($isInstalled) {
+                                Write-Host "  $([char]0x2713) " -NoNewline -ForegroundColor Green
+                            } else {
+                                Write-Host "    " -NoNewline
+                            }
+                            Write-Host ($p.name.PadRight($nameWidth)) -NoNewline -ForegroundColor White
+                            Write-Host "$soundStr sounds" -NoNewline -ForegroundColor DarkGray
+                            if ($displayName) {
+                                Write-Host "   $displayName" -NoNewline -ForegroundColor DarkGray
+                            }
+                            Write-Host ""
+                        }
+                        Write-Host ""
+                    }
+                    return
+                }
+                "search" {
+                    if (-not $Arg2) {
+                        Write-Host "Usage: peon packs search <query>" -ForegroundColor Yellow
+                        return
+                    }
+                    $query = $Arg2.ToLower()
+                    $regUrl = "https://peonping.github.io/registry/index.json"
+                    try {
+                        $regResp = Invoke-WebRequest -Uri $regUrl -UseBasicParsing -ErrorAction Stop
+                        $reg = $regResp.Content | ConvertFrom-Json
+                    } catch {
+                        Write-Host "Error: could not fetch registry." -ForegroundColor Red
+                        return
+                    }
+                    $matches = @($reg.packs | Where-Object { $_.name.ToLower().Contains($query) })
+                    if ($matches.Count -eq 0) {
+                        Write-Host "No packs matching '$Arg2'." -ForegroundColor Yellow
+                        return
+                    }
+                    Write-Host ""
+                    Write-Host "  Search results for '$Arg2' ($($matches.Count) found)" -ForegroundColor Cyan
+                    Write-Host ""
+                    $maxName = ($matches | ForEach-Object { $_.name.Length } | Measure-Object -Maximum).Maximum
+                    $nameWidth = [Math]::Max($maxName + 2, 24)
+                    foreach ($p in ($matches | Sort-Object { $_.name })) {
+                        $isInstalled = $p.name -in $available
+                        $tier = if ($p.trust_tier) { $p.trust_tier } else { "unknown" }
+                        $soundStr = if ($p.sound_count) { "$($p.sound_count)".PadLeft(4) } else { "   ?" }
+                        $displayName = if ($p.display_name) { $p.display_name } else { "" }
+                        if ($isInstalled) {
+                            Write-Host "  $([char]0x2713) " -NoNewline -ForegroundColor Green
+                        } else {
+                            Write-Host "    " -NoNewline
+                        }
+                        Write-Host ($p.name.PadRight($nameWidth)) -NoNewline -ForegroundColor White
+                        Write-Host "$soundStr sounds" -NoNewline -ForegroundColor DarkGray
+                        if ($displayName) {
+                            Write-Host "   $displayName" -NoNewline -ForegroundColor DarkGray
+                        }
+                        Write-Host "  " -NoNewline
+                        Write-Host "[$tier]" -ForegroundColor DarkGray
+                    }
+                    return
+                }
                 default {
                     # "list" or no subcommand - show available packs
                     Write-Host "Available packs:" -ForegroundColor Cyan
@@ -703,23 +855,25 @@ if ($Command) {
         }
         "^--help$" {
             Write-Host "peon-ping commands:" -ForegroundColor Cyan
-            Write-Host "  --toggle          Toggle enabled/paused"
-            Write-Host "  --pause           Pause sounds"
-            Write-Host "  --resume          Resume sounds"
-            Write-Host "  --mute            Alias for --pause"
-            Write-Host "  --unmute          Alias for --resume"
-            Write-Host "  --status          Show current status"
-            Write-Host "  --volume N        Set volume (0.0-1.0)"
-            Write-Host "  --help            Show this help"
+            Write-Host "  --toggle              Toggle enabled/paused"
+            Write-Host "  --pause               Pause sounds"
+            Write-Host "  --resume              Resume sounds"
+            Write-Host "  --mute                Alias for --pause"
+            Write-Host "  --unmute              Alias for --resume"
+            Write-Host "  --status              Show current status"
+            Write-Host "  --volume N            Set volume (0.0-1.0)"
+            Write-Host "  --help                Show this help"
             Write-Host ""
             Write-Host "Pack management:" -ForegroundColor Cyan
-            Write-Host "  --packs           List available sound packs"
-            Write-Host "  --packs use <n>   Switch to a specific pack"
-            Write-Host "  --packs next      Cycle to the next pack"
-            Write-Host "  --packs bind      Bind a pack to current directory"
-            Write-Host "  --packs unbind    Remove a pack binding"
-            Write-Host "  --packs bindings  List all pack bindings"
-            Write-Host "  --pack [name]     Switch pack (or cycle)"
+            Write-Host "  --packs               List installed sound packs"
+            Write-Host "  --packs use <name>    Switch to pack (auto-installs from registry)"
+            Write-Host "  --packs next          Cycle to the next pack"
+            Write-Host "  --packs community     List all packs from registry"
+            Write-Host "  --packs search <q>    Search registry packs by name"
+            Write-Host "  --packs bind          Bind a pack to current directory"
+            Write-Host "  --packs unbind        Remove a pack binding"
+            Write-Host "  --packs bindings      List all pack bindings"
+            Write-Host "  --pack [name]         Switch pack (or cycle)"
             return
         }
     }
