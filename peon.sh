@@ -4186,7 +4186,7 @@ if [ "${PEON_EXIT:-true}" = "true" ]; then
   # Maintain tab title even on suppressed events (plan mode, unknown events, subagent start).
   # PROJECT is only emitted by paths that should maintain the title; agent/disabled paths omit it.
   if [ -n "${PROJECT:-}" ] && [ "${EVENT:-}" != "SessionEnd" ]; then
-    printf '\033]0;%s\007' "${MARKER:-}${PROJECT}: ${STATUS:-working}" > /dev/tty 2>/dev/null || true
+    { printf '\033]0;%s\007' "${MARKER:-}${PROJECT}: ${STATUS:-working}" > /dev/tty; } 2>/dev/null || true
   fi
   exit 0
 fi
@@ -4259,8 +4259,10 @@ if [ "$EVENT" = "SessionStart" ] && [ -f "$PEON_DIR/.update_available" ]; then
   NEW_VER=$(cat "$PEON_DIR/.update_available" 2>/dev/null | tr -d '[:space:]')
   CUR_VER=""
   [ -f "$PEON_DIR/VERSION" ] && CUR_VER=$(cat "$PEON_DIR/VERSION" | tr -d '[:space:]')
-  if [ -n "$NEW_VER" ]; then
+  if [ -n "$NEW_VER" ] && [ "$NEW_VER" != "$CUR_VER" ]; then
     echo "peon-ping update available: ${CUR_VER:-?} → $NEW_VER — run: curl -fsSL https://raw.githubusercontent.com/PeonPing/peon-ping/main/install.sh | bash" >&2
+  elif [ "$NEW_VER" = "$CUR_VER" ]; then
+    rm -f "$PEON_DIR/.update_available"
   fi
 fi
 
@@ -4321,9 +4323,9 @@ fi
 _peon_esc() {
   local seq="$1"
   if [ -n "${TMUX:-}" ]; then
-    printf '\033Ptmux;\033%s\033\\' "$seq" > "$_peon_tty" 2>/dev/null || true
+    { printf '\033Ptmux;\033%s\033\\' "$seq" > "$_peon_tty"; } 2>/dev/null || true
   else
-    printf '%s' "$seq" > "$_peon_tty" 2>/dev/null || true
+    { printf '%s' "$seq" > "$_peon_tty"; } 2>/dev/null || true
   fi
 }
 
