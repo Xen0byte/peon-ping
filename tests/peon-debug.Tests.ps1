@@ -19,7 +19,7 @@ BeforeAll {
 
 Describe "win-play.ps1 PEON_DEBUG warnings" {
 
-    It "emits warning when WAV playback fails and PEON_DEBUG=1" {
+    It "emits warning when native playback fails and PEON_DEBUG=1" {
         $env:PEON_DEBUG = "1"
         try {
             # Pass a non-existent WAV path to trigger the catch block
@@ -28,8 +28,8 @@ Describe "win-play.ps1 PEON_DEBUG warnings" {
                 `$WarningPreference = 'Continue'
                 & '$($script:WinPlayPath)' -path 'C:\nonexistent\fake.wav' -vol 0.5 3>&1
             "
-            $warningText = ($warnings | Where-Object { $_ -is [System.Management.Automation.WarningRecord] -or ($_ -match 'WAV playback failed') }) -join "`n"
-            $warningText | Should -Match "WAV playback failed"
+            $warningText = ($warnings | Where-Object { $_ -is [System.Management.Automation.WarningRecord] -or ($_ -match 'native playback failed') }) -join "`n"
+            $warningText | Should -Match "native playback failed"
         } finally {
             Remove-Item Env:\PEON_DEBUG -ErrorAction SilentlyContinue
         }
@@ -147,8 +147,8 @@ Describe "win-play.ps1 PEON_DEBUG diagnostic patterns" {
         $script:WinPlayContent | Should -Match '\$peonDebug\s*=\s*\$env:PEON_DEBUG\s+-eq\s+"1"'
     }
 
-    It "has PEON_DEBUG-gated warning for WAV playback failure" {
-        $script:WinPlayContent | Should -Match 'if\s*\(\$peonDebug\)\s*\{\s*Write-Warning\s+"peon-ping:\s*WAV playback failed'
+    It "has PEON_DEBUG-gated warning for native playback failure" {
+        $script:WinPlayContent | Should -Match 'if\s*\(\$peonDebug\)\s*\{\s*Write-Warning\s+"peon-ping:\s*native playback failed'
     }
 
     It "has PEON_DEBUG-gated warning for no audio player found" {

@@ -8,9 +8,12 @@ param(
 # Diagnostic logging: set PEON_DEBUG=1 to surface silent failure diagnostics on stderr
 $peonDebug = $env:PEON_DEBUG -eq "1"
 
-# WAV files: use MediaPlayer with volume control
-# (MediaPlayer is WPF/PresentationCore — safe in this detached process, not in the hook itself)
-if ($path -match "\.wav$") {
+function Invoke-NativeMediaPlayback {
+    param(
+        [Parameter(Mandatory = $true)][string]$path,
+        [Parameter(Mandatory = $true)][double]$vol
+    )
+
     try {
         Add-Type -AssemblyName PresentationCore
         $player = [System.Windows.Media.MediaPlayer]::new()
@@ -24,6 +27,7 @@ if ($path -match "\.wav$") {
         # Pump WPF dispatcher so MediaOpened/MediaFailed events fire in this console process
         $deadline = [datetime]::UtcNow.AddSeconds(5)
         $failed = $false
+        $opened = $false
         while ([datetime]::UtcNow -lt $deadline) {
             [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke(
                 [System.Windows.Threading.DispatcherPriority]::Background,
@@ -32,18 +36,21 @@ if ($path -match "\.wav$") {
             $failEvt = Get-Event -SourceIdentifier MediaFailed -ErrorAction SilentlyContinue
             if ($failEvt) {
                 $failed = $true
-                if ($peonDebug) { Write-Warning "peon-ping: WAV playback failed for '$path': $($failEvt.SourceEventArgs.ErrorException)" }
+                if ($peonDebug) { Write-Warning "peon-ping: native playback failed for '$path': $($failEvt.SourceEventArgs.ErrorException)" }
                 break
             }
             $evt = Get-Event -SourceIdentifier MediaOpened -ErrorAction SilentlyContinue
-            if ($evt) { break }
+            if ($evt) {
+                $opened = $true
+                break
+            }
             Start-Sleep -Milliseconds 50
         }
 
         # Timeout: neither MediaOpened nor MediaFailed fired — treat as failure
         if (-not $failed -and -not $evt) {
             $failed = $true
-            if ($peonDebug) { Write-Warning "peon-ping: WAV playback failed for '$path': timed out waiting for media events" }
+            if ($peonDebug) { Write-Warning "peon-ping: native playback failed for '$path': timed out waiting for media events" }
         }
 
         # Wait for playback to finish (only if opened successfully)
@@ -55,10 +62,21 @@ if ($path -match "\.wav$") {
         Unregister-Event -SourceIdentifier MediaOpened -ErrorAction SilentlyContinue
         Unregister-Event -SourceIdentifier MediaFailed -ErrorAction SilentlyContinue
         $player.Close()
+
+        return (-not $failed -and $opened)
     } catch {
-        if ($peonDebug) { Write-Warning "peon-ping: WAV playback failed for '$path': $_" }
+        if ($peonDebug) { Write-Warning "peon-ping: native playback failed for '$path': $_" }
     }
-    exit 0
+
+    return $false
+}
+
+# Prefer native Windows playback for WAV files first. Other formats use CLI players
+# because codec availability for MediaPlayer is inconsistent across Windows installs.
+if ($path -match '\.wav$') {
+    if (Invoke-NativeMediaPlayback -Path $path -vol $vol) {
+        exit 0
+    }
 }
 
 # Non-WAV formats (mp3, ogg, etc.): CLI player priority chain
