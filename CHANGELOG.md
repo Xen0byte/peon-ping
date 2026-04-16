@@ -1,3 +1,18 @@
+## v2.20.1 (2026-04-16)
+
+### Fixed
+- **macOS notifications aborted on non-iTerm2/kitty terminals**. `local` declarations outside function scope in `scripts/notify.sh` caused Terminal.app, Warp, Ghostty, Zed, etc. to fail with `unbound variable` under `set -u`. Removed `local`, variables are now script-scoped. PR #471.
+- **Overlay never displayed when `NSScreen.screens.count` probe returned empty**. The `|| echo 1` fallback only triggered on non-zero exit, not empty stdout. Added numeric-and-greater-than-zero validation so `seq 0 -1` never runs zero iterations on restricted macOS environments or when osascript is mocked. PR #471.
+- **`notify.sh` exit code 1 leaked from `_run_overlay` subshell when `session_file` was empty**. Replaced the `[ -n "$session_file" ] && rm ...` short-circuit with explicit `if/then` so the subshell always exits 0. PR #471.
+- **`peon notifications marker ""` now correctly disables the marker**. Previously both "no arg" and "empty arg" hit the "show current" branch because `${3:-}` collapsed them. Now `peon notifications marker` (no arg) shows current, `peon notifications marker ""` disables. Behavior change scoped to this edge case. PR #471.
+
+### Docs
+- **TTS architecture documents landed**. ADR-001 (backend architecture), TTS integration design doc, and PRD-003 (product requirements), all referenced in #442 but not previously committed. PR #471.
+
+### Internal
+- Pester tests updated to match the MediaPlayer MP3/WMA routing change from #442 (seven scenarios in `adapters-windows.Tests.ps1`, `peon-debug.Tests.ps1`, `peon-security.Tests.ps1`). PR #471.
+- `tests/peon.bats` mac overlay ide_pid extraction anchored on `top-center` and walking backward to the first numeric token. Robust against TTY vs non-TTY test environments.
+
 ## v2.20.0 (2026-04-14)
 
 ### Added
