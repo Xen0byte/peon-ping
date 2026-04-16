@@ -3237,16 +3237,22 @@ json.dump(m, open('$TEST_DIR/packs/peon/manifest.json', 'w'))
   run_peon '{"hook_event_name":"Stop","cwd":"/tmp/myproject","session_id":"s1","permission_mode":"default"}'
   [ "$PEON_EXIT" -eq 0 ]
   [ -f "$TEST_DIR/overlay.log" ]
-  # Extract ide_pid using notif_position (\"top-center\") as an anchor, since
-  # it is always present and always non-empty. ide_pid is the field
-  # immediately before notif_position when bundle_id/session_tty/subtitle
-  # are empty (the default in a bare test environment). Using a positional
-  # NF-N index is too brittle against msg token count and optional-field
-  # collapsing by awk.
+  # Extract ide_pid by anchoring on "top-center" (notif_position, always
+  # present and always non-empty) and walking backward to find the first
+  # purely-numeric token. The token immediately before "top-center" is
+  # session_tty when the test runs in a TTY (which is non-numeric, e.g.
+  # /dev/ttys029), or ide_pid when session_tty is empty. Walking back to
+  # the first numeric token finds ide_pid in both cases. Positional NF-N
+  # indexing is too brittle against optional-field collapsing by awk.
   ide_pid=$(tail -1 "$TEST_DIR/overlay.log" | awk '
     {
+      anchor = 0
       for (i = 1; i <= NF; i++) {
-        if ($i == "top-center") { print $(i-1); exit }
+        if ($i == "top-center") { anchor = i; break }
+      }
+      if (anchor == 0) exit
+      for (j = anchor - 1; j >= 1; j--) {
+        if ($j ~ /^[0-9]+$/) { print $j; exit }
       }
     }
   ')
