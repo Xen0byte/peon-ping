@@ -1,3 +1,20 @@
+## v2.23.0 (2026-04-25)
+
+### Added
+- **Claude Code integration in the Nix Home Manager module**. New `programs.peon-ping.claudeCodeIntegration` flag installs the Claude Code hook scripts under `~/.claude/hooks/peon-ping/` and merges the standard peon-ping hook entries into `~/.claude/settings.json`. PR #480, closes #368. Thanks @pandego.
+
+### Fixed
+- **Linux focus detection**. `terminal_is_focused` now checks both the X11 window class and the window title, so `zellij` running inside Alacritty is correctly detected as a terminal, while a window titled `start` no longer false-matches the `st` terminal. PR #491, closes #472. Thanks @pandego.
+- **`peon packs install` failed for packs whose manifest sits at the registry source repo root**. An empty `source_path` is a valid "manifest at root" signal, but `pack-download.sh` was treating it as missing metadata and falling back to the og-packs registry. Aligned with the Windows installer's existing handling. PR #490, closes #343. Thanks @ventopreto.
+- **`install.sh` and `peon update` dropped sibling custom hooks**. The matcher-entry filter was too coarse and removed the entire matcher entry whenever any inner hook contained `peon.sh` or `notify.sh`, silently nuking unrelated hooks composed under the same matcher. Now filters at the inner-hook level. Symmetric fix in `install.sh`, `install.ps1`, `uninstall.sh`, `uninstall.ps1`. PR #485, closes #484. Thanks @tarekrached.
+- **`save_sound_pid $!` aborted hooks under `set -u` when audio ran synchronously**. In `PEON_TEST=1` paths and any branch where the player call returned without backgrounding, `$!` was unset and tripped nounset. The four `play_linux_sound` call sites now skip `save_sound_pid` in test/sync mode, and `save_sound_pid` itself early-returns on an empty arg as defense in depth.
+
+### Tests
+- Windows Pester expectations recalibrated to match the runtime changes from #475 (`Test-PathRuleMatch`, `pack_rotation.Count`, IDE-rule status output). PR #479, closes #478. Thanks @kibermaks.
+
+### Docs
+- Chinese and Japanese READMEs updated with the new Nix `claudeCodeIntegration` option and the split between Claude Code (auto-installed) and other-IDE (opt-in) hook setup.
+
 ## v2.22.0 (2026-04-19)
 
 ### Added

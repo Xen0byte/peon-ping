@@ -131,6 +131,7 @@ in {
   programs.peon-ping = {
     enable = true;
     package = inputs.peon-ping.packages.${pkgs.system}.default;
+    claudeCodeIntegration = true;
 
     settings = {
       default_pack = "glados";
@@ -167,7 +168,7 @@ in {
     enableZshIntegration = true;
   };
 
-  # Cursor 钩子
+  # 可选的额外 IDE 钩子（如 Cursor）
   home.file.".cursor/hooks.json".text = builtins.toJSON {
     version = 1;
     hooks = {
@@ -195,13 +196,13 @@ in {
 }
 ```
 
-**IDE 钩子**：peon-ping Home Manager 模块不会自动设置你的 IDE 钩子，以避免更新冲突。你需要根据 IDE 配置管理方式自行定义这些钩子（参见上方示例）。
-- peon-ping 为各种 IDE 提供适配器脚本如 `cursor.sh` — 见 [`adapters/`](https://github.com/PeonPing/peon-ping/tree/main/adapters)
-- 你需要在钩子中调用它们，如
+**Claude Code 钩子**：设置 `programs.peon-ping.claudeCodeIntegration = true;` 即可将 Claude Code 钩子脚本安装到 `~/.claude/hooks/peon-ping/`，并把标准的 peon-ping 钩子条目合并进 `~/.claude/settings.json`。
+
+**其他 IDE 钩子**：为避免覆盖与 peon-ping 无关的 IDE 设置，其他 IDE 的钩子仍然是可选的。peon-ping 在 [`adapters/`](https://github.com/PeonPing/peon-ping/tree/main/adapters) 下提供如 `cursor.sh` 之类的适配器脚本，你可以这样接入：
   ```sh
   ${inputs.peon-ping.packages.${pkgs.system}.default}/share/peon-ping/adapters/$YOUR_IDE.sh EVENT_NAME
   ```
-  参见上方 Cursor 示例
+  参见上方 Cursor 示例。
 
 ## 你会听到什么
 

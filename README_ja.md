@@ -132,6 +132,7 @@ in {
   programs.peon-ping = {
     enable = true;
     package = inputs.peon-ping.packages.${pkgs.system}.default;
+    claudeCodeIntegration = true;
 
     settings = {
       default_pack = "glados";
@@ -168,7 +169,7 @@ in {
     enableZshIntegration = true;
   };
 
-  # Cursor hooks
+  # 任意の追加 IDE フック（Cursor など）
   home.file.".cursor/hooks.json".text = builtins.toJSON {
     version = 1;
     hooks = {
@@ -196,9 +197,9 @@ in {
 }
 ```
 
-**IDE フック**: peon-ping の Home Manager モジュールは、競合する更新を避けるため IDE フックのセットアップを行いません。IDE の管理方法に応じてフックを自分で定義する必要があります（上記の例を参照）。
-- peon-ping は `cursor.sh` などの各種 IDE 向けアダプタースクリプトを提供しています — [`adapters/`](https://github.com/PeonPing/peon-ping/tree/main/adapters) を参照
-- 以下のようにフックとして呼び出す必要があります：
+**Claude Code フック**: `programs.peon-ping.claudeCodeIntegration = true;` を設定すると、Claude Code 用のフックスクリプトを `~/.claude/hooks/peon-ping/` にインストールし、標準の peon-ping フックエントリを `~/.claude/settings.json` にマージします。
+
+**その他の IDE フック**: peon-ping と無関係な IDE 設定を上書きしないよう、その他の IDE フックは引き続き任意です。peon-ping は [`adapters/`](https://github.com/PeonPing/peon-ping/tree/main/adapters) 配下に `cursor.sh` などのアダプタースクリプトを提供しており、次のように接続できます：
   ```sh
   ${inputs.peon-ping.packages.${pkgs.system}.default}/share/peon-ping/adapters/$YOUR_IDE.sh EVENT_NAME
   ```
