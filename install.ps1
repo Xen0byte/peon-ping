@@ -347,6 +347,22 @@ if (Test-Path $hookHandleUsePs1Source) {
     }
 }
 
+# --- Install tts-native.ps1 (Windows SAPI5 TTS backend) ---
+$ttsNativeSource = Join-Path $ScriptDir "scripts\tts-native.ps1"
+$ttsNativeTarget = Join-Path $scriptsDir "tts-native.ps1"
+
+if (Test-Path $ttsNativeSource) {
+    # Local install: copy from repo
+    Copy-Item -Path $ttsNativeSource -Destination $ttsNativeTarget -Force
+} else {
+    # One-liner install: download from GitHub
+    try {
+        Invoke-WebRequest -Uri "$RepoBase/scripts/tts-native.ps1" -OutFile $ttsNativeTarget -UseBasicParsing -ErrorAction Stop
+    } catch {
+        Write-Host "  Warning: Could not download tts-native.ps1" -ForegroundColor Yellow
+    }
+}
+
 # --- Install the main hook script (PowerShell) ---
 $hookScript = @'
 # peon-ping hook for Claude Code (Windows native)
@@ -3112,9 +3128,19 @@ foreach ($adapterFile in $adapterFiles) {
 Write-Host "  Installed $($adapterFiles.Count) adapter scripts to $adaptersDir"
 
 # --- Install CLI shortcut ---
+# Prefer pwsh (PowerShell 7+) when available, fall back to Windows PowerShell 5.1.
+# pwsh has its own clean module path; powershell.exe can fail when PSModulePath
+# leaks PS 7 module dirs in front of the 5.1 inbox modules (seen on dev
+# environments where CloudSDK or similar polluted PSModulePath) — symptom is
+# "Microsoft.PowerShell.Security module could not be loaded" on Get-ExecutionPolicy.
 $peonCli = @"
 @echo off
-powershell -NoProfile -NonInteractive -Command "& '%USERPROFILE%\.claude\hooks\peon-ping\peon.ps1' %*"
+where pwsh >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+    pwsh -NoProfile -NonInteractive -Command "& '%USERPROFILE%\.claude\hooks\peon-ping\peon.ps1' %*"
+) else (
+    powershell -NoProfile -NonInteractive -Command "& '%USERPROFILE%\.claude\hooks\peon-ping\peon.ps1' %*"
+)
 "@
 $cliBinDir = Join-Path $env:USERPROFILE ".local\bin"
 if (-not (Test-Path $cliBinDir)) {
@@ -3125,13 +3151,19 @@ $cliBatPath = Join-Path $cliBinDir "peon.cmd"
 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 [System.IO.File]::WriteAllLines($cliBatPath, $peonCli.Split("`n"), $utf8NoBom)
 
-# Also create a bash-compatible script for Git Bash / WSL
-# Use the actual Windows path (resolved at install time) to avoid path translation issues
+# Also create a bash-compatible script for Git Bash / WSL.
+# Use the actual Windows path (resolved at install time) to avoid path translation issues.
+# Same pwsh-then-powershell preference as peon.cmd above.
 $peonPs1Path = Join-Path $InstallDir "peon.ps1"
 $peonShScript = @"
 #!/usr/bin/env bash
 # peon-ping CLI wrapper for Git Bash / WSL / Unix shells on Windows
-powershell.exe -NoProfile -NonInteractive -Command "& '$peonPs1Path' `$*"
+if command -v pwsh >/dev/null 2>&1; then
+    PS_EXE=pwsh
+else
+    PS_EXE=powershell.exe
+fi
+"`$PS_EXE" -NoProfile -NonInteractive -Command "& '$peonPs1Path' `$*"
 "@
 $peonShPath = Join-Path $cliBinDir "peon"
 [System.IO.File]::WriteAllLines($peonShPath, $peonShScript.Split("`n"), $utf8NoBom)

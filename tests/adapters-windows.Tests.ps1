@@ -71,7 +71,8 @@ Describe "Core Script Syntax Validation" {
     It "<name> has valid PowerShell syntax" -ForEach @(
         @{ name = "install.ps1" },
         @{ name = "scripts/win-play.ps1" },
-        @{ name = "scripts/win-notify.ps1" }
+        @{ name = "scripts/win-notify.ps1" },
+        @{ name = "scripts/tts-native.ps1" }
     ) {
         $path = Join-Path $script:RepoRoot $name
         $path | Should -Exist
@@ -684,6 +685,13 @@ Describe "install.ps1 Adapter Installation" {
     It "installs win-notify.ps1 alongside win-play.ps1" {
         $script:installContent | Should -Match 'win-notify\.ps1'
     }
+
+    It "installs tts-native.ps1 (Windows SAPI5 TTS backend)" {
+        # Matches the install.ps1 block that copies / downloads the script
+        # into the scripts directory. Paired with the win-notify test above.
+        $script:installContent | Should -Match 'scripts\\tts-native\.ps1'
+        $script:installContent | Should -Match 'scripts/tts-native\.ps1'
+    }
 }
 
 # ============================================================
@@ -850,6 +858,101 @@ Describe "win-notify.ps1 Toast Script" {
     It "wraps in try/catch for silent degradation" {
         $script:winNotifyContent | Should -Match 'try \{'
         $script:winNotifyContent | Should -Match 'catch \{'
+    }
+}
+
+# ============================================================
+# tts-native.ps1 Windows SAPI5 TTS Backend
+# ============================================================
+# Structural assertions for the native Windows TTS script. Behaviour is
+# covered by tests/tts-native.Tests.ps1; this file only confirms that the
+# script exists, parses, declares the expected parameters, and cannot
+# bypass execution policy. Keeping shape checks here keeps them alongside
+# the other `.ps1` structural suites (win-play, win-notify, etc.).
+
+Describe "tts-native.ps1 Windows SAPI5 TTS Backend" {
+    BeforeAll {
+        $script:ttsNativePath = Join-Path (Join-Path $script:RepoRoot "scripts") "tts-native.ps1"
+        $script:ttsNativeContent = Get-Content $script:ttsNativePath -Raw
+    }
+
+    It "exists in scripts/" {
+        $script:ttsNativePath | Should -Exist
+    }
+
+    It "has valid PowerShell syntax" {
+        $errors = $null
+        $null = [System.Management.Automation.PSParser]::Tokenize($script:ttsNativeContent, [ref]$errors)
+        $errors.Count | Should -Be 0
+    }
+
+    It "has a comment-based help header with SYNOPSIS / PARAMETER / EXAMPLE" {
+        $script:ttsNativeContent | Should -Match '(?s)^\s*<#.*\.SYNOPSIS.*\.PARAMETER.*\.EXAMPLE.*#>'
+    }
+
+    It "declares InputText as a pipeline-bound string parameter" {
+        $script:ttsNativeContent | Should -Match '(?s)\[Parameter\(\s*ValueFromPipeline\s*=\s*\$true\s*\)\][^}]*\[string\]\s*\$InputText'
+    }
+
+    It "declares Voice parameter with 'default' default" {
+        $script:ttsNativeContent | Should -Match '\[string\]\s*\$Voice\s*=\s*"default"'
+    }
+
+    It "declares Rate parameter as [double] with 1.0 default" {
+        $script:ttsNativeContent | Should -Match '\[double\]\s*\$Rate\s*=\s*1\.0'
+    }
+
+    It "declares Vol parameter as [double] with 0.5 default" {
+        $script:ttsNativeContent | Should -Match '\[double\]\s*\$Vol\s*=\s*0\.5'
+    }
+
+    It "declares ListVoices as a [switch]" {
+        $script:ttsNativeContent | Should -Match '\[switch\]\s*\$ListVoices'
+    }
+
+    It "uses begin/process/end blocks to accumulate pipeline input" {
+        $script:ttsNativeContent | Should -Match '(?ms)^\s*begin\s*\{'
+        $script:ttsNativeContent | Should -Match '(?ms)^\s*process\s*\{'
+        $script:ttsNativeContent | Should -Match '(?ms)^\s*end\s*\{'
+    }
+
+    It "loads the System.Speech assembly" {
+        $script:ttsNativeContent | Should -Match 'Add-Type\s+-AssemblyName\s+System\.Speech'
+    }
+
+    It "instantiates SpeechSynthesizer" {
+        $script:ttsNativeContent | Should -Match 'System\.Speech\.Synthesis\.SpeechSynthesizer'
+    }
+
+    It "applies the SAPI rate mapping [int][math]::Round((Rate-1.0)*10)" {
+        $script:ttsNativeContent | Should -Match '\[int\]\[math\]::Round\(\s*\(\s*\$Rate\s*-\s*1\.0\s*\)\s*\*\s*10\s*\)'
+    }
+
+    It "applies the SAPI volume mapping [int][math]::Round(Vol*100)" {
+        $script:ttsNativeContent | Should -Match '\[int\]\[math\]::Round\(\s*\$Vol\s*\*\s*100\s*\)'
+    }
+
+    It "clamps SAPI rate into -10..+10" {
+        $script:ttsNativeContent | Should -Match '\[math\]::Max\(\s*-10'
+        $script:ttsNativeContent | Should -Match '\[math\]::Min\(\s*10'
+    }
+
+    It "clamps SAPI volume into 0..100" {
+        $script:ttsNativeContent | Should -Match '\[math\]::Max\(\s*0'
+        $script:ttsNativeContent | Should -Match '\[math\]::Min\(\s*100'
+    }
+
+    It "routes debug diagnostics through PEON_DEBUG" {
+        $script:ttsNativeContent | Should -Match 'PEON_DEBUG'
+    }
+
+    It "wraps SpeechSynthesizer invocation in try/catch" {
+        $script:ttsNativeContent | Should -Match 'try\s*\{'
+        $script:ttsNativeContent | Should -Match 'catch\s*\{'
+    }
+
+    It "does not use ExecutionPolicy Bypass" {
+        $script:ttsNativeContent | Should -Not -Match "ExecutionPolicy Bypass"
     }
 }
 
@@ -1633,6 +1736,25 @@ Describe "install.ps1 Default Config" {
     It "creates CLI wrappers for both cmd and bash" {
         $script:installContent | Should -Match 'peon\.cmd'
         $script:installContent | Should -Match '#!/usr/bin/env bash'
+    }
+
+    It "peon.cmd shim probes for pwsh before falling back to powershell" {
+        # pwsh-first avoids the PS 5.1 / PS 7 PSModulePath clash where 5.1 can
+        # load PS 7's incompatible Security module and fail to resolve
+        # Get-ExecutionPolicy. If pwsh is installed, prefer it; else use
+        # powershell.exe. Structural test on the install.ps1 here-string.
+        $script:installContent | Should -Match 'where pwsh'
+        $script:installContent | Should -Match 'pwsh -NoProfile -NonInteractive -Command "& ''%USERPROFILE%\\.claude\\hooks\\peon-ping\\peon\.ps1'''
+        $script:installContent | Should -Match 'powershell -NoProfile -NonInteractive -Command "& ''%USERPROFILE%\\.claude\\hooks\\peon-ping\\peon\.ps1'''
+    }
+
+    It "peon bash shim probes for pwsh before falling back to powershell" {
+        # Same resiliency on the bash wrapper. command -v pwsh decides; both
+        # branches pass -NoProfile -NonInteractive -Command to whichever
+        # executable wins.
+        $script:installContent | Should -Match 'command -v pwsh'
+        $script:installContent | Should -Match 'PS_EXE=pwsh'
+        $script:installContent | Should -Match 'PS_EXE=powershell\.exe'
     }
 
     It "validates pack names with safe charset" {
