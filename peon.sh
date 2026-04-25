@@ -494,7 +494,7 @@ play_sound() {
         "$player" -v "$vol" "$file" >/dev/null 2>&1
       else
         nohup "$player" -v "$vol" "$file" >/dev/null 2>&1 &
-        save_sound_pid "${!:-}"
+        save_sound_pid $!
       fi
       ;;
     wsl)
@@ -513,7 +513,7 @@ play_sound() {
         }
         \$p.Close()
       " &>/dev/null &
-      save_sound_pid "${!:-}"
+      save_sound_pid $!
       ;;
     devcontainer|ssh)
       local relay_host_default="host.docker.internal"
@@ -533,7 +533,7 @@ play_sound() {
         player=$(detect_linux_player "${LINUX_AUDIO_PLAYER:-}") || player=""
         if [ -n "$player" ]; then
           play_linux_sound "$file" "$vol" "$player"
-          save_sound_pid "${!:-}"
+          [ "${PEON_TEST:-0}" = "1" ] || save_sound_pid $!
         fi
       # SSH auto mode tries relay first, then falls back to local playback.
       elif [ "$PEON_PLATFORM" = "ssh" ] && [ "$ssh_mode" = "auto" ]; then
@@ -545,7 +545,7 @@ play_sound() {
           player=$(detect_linux_player "${LINUX_AUDIO_PLAYER:-}") || player=""
           if [ -n "$player" ]; then
             play_linux_sound "$file" "$vol" "$player"
-            save_sound_pid "${!:-}"
+            [ "${PEON_TEST:-0}" = "1" ] || save_sound_pid $!
           fi
         fi
       else
@@ -555,7 +555,7 @@ play_sound() {
         else
           nohup curl -sf -H "X-Volume: $vol" \
             "http://${relay_host}:${relay_port}/play?file=${encoded_path}" >/dev/null 2>&1 &
-          save_sound_pid "${!:-}"
+          save_sound_pid $!
         fi
       fi
       ;;
@@ -564,7 +564,7 @@ play_sound() {
       player=$(detect_linux_player "${LINUX_AUDIO_PLAYER:-}") || player=""
       if [ -n "$player" ]; then
         play_linux_sound "$file" "$vol" "$player"
-        save_sound_pid "${!:-}"
+        [ "${PEON_TEST:-0}" = "1" ] || save_sound_pid $!
       else
         _peon_log play "error=\"no audio backend found\" searched=\"pw-play,paplay,ffplay,mpv,play,aplay\""
       fi
@@ -575,7 +575,7 @@ play_sound() {
       msys_player=$(detect_linux_player "${LINUX_AUDIO_PLAYER:-}") || msys_player=""
       if [ -n "$msys_player" ]; then
         play_linux_sound "$file" "$vol" "$msys_player"
-        save_sound_pid "${!:-}"
+        [ "${PEON_TEST:-0}" = "1" ] || save_sound_pid $!
       else
         # PowerShell fallback via win-play.ps1
         local wpath win_play_script
@@ -588,7 +588,7 @@ play_sound() {
             powershell.exe -NoProfile -NonInteractive -File "$wscript" -path "$wpath" -vol "$vol" >/dev/null 2>&1
           else
             nohup powershell.exe -NoProfile -NonInteractive -File "$wscript" -path "$wpath" -vol "$vol" >/dev/null 2>&1 &
-            save_sound_pid "${!:-}"
+            save_sound_pid $!
           fi
         fi
       fi
