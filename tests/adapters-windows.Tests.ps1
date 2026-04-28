@@ -2293,13 +2293,13 @@ Describe "Windows IDE rules and exclude_dirs parity" {
 
     It "status output surfaces IDE source excluded paths and IDE rule counts" {
         $script:installContent | Should -Match 'IDE source \(status\):'
-        $script:installContent | Should -Match 'path rules skipped here \(exclude_dirs\):'
-        $script:installContent | Should -Match 'excluded paths: \$\(\$excludeDirs.Count\) configured'
+        $script:installContent | Should -Match 'silenced dirs \(exclude_dirs\): \$\(\$excludeDirs.Count\) configured'
+        $script:installContent | Should -Match 'SILENCED here: cwd matched exclude_dirs ->'
         $script:installContent | Should -Match 'IDE rules: \$\(\$ideRules.Count\) configured'
     }
 
     It "pack selection hierarchy includes ide_rules after path_rules" {
-        $script:installContent | Should -Match 'session_override > path_rules \(unless excluded\) > ide_rules > rotation > default_pack'
+        $script:installContent | Should -Match 'session_override > path_rules > ide_rules > rotation > default_pack'
         $script:installContent | Should -Match 'if \(\$sessionIde -and \$ideRules\)'
         $script:installContent | Should -Match 'elseif \(\$pathRulePack\)'
         $script:installContent | Should -Match 'elseif \(\$ideRulePack\)'

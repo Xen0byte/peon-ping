@@ -1287,35 +1287,34 @@ status_ide = normalize_ide_id(
 # (those are runtime state, not answerable from cwd alone).
 def resolve_active_pack():
     cwd = os.getcwd()
-    excluded_pattern = next((pat for pat in exclude_dirs if path_pattern_matches(cwd, pat)), None)
+    silenced_pattern = next((pat for pat in exclude_dirs if path_pattern_matches(cwd, pat)), None)
 
-    # 1. Path rules (unless the cwd is explicitly excluded).
-    if not excluded_pattern:
-        for r in rules:
-            pat = r.get('pattern', '')
-            pack = r.get('pack', '')
-            if cwd and pat and pack and path_pattern_matches(cwd, pat):
-                return (pack, 'path rule: ' + pat + ' -> ' + pack, None, False, excluded_pattern)
+    # 1. Path rules.
+    for r in rules:
+        pat = r.get('pattern', '')
+        pack = r.get('pack', '')
+        if cwd and pat and pack and path_pattern_matches(cwd, pat):
+            return (pack, 'path rule: ' + pat + ' -> ' + pack, None, False, silenced_pattern)
 
     # 2. IDE rules.
     for r in ide_rules:
         ide = normalize_ide_id(r.get('ide', ''))
         pack = r.get('pack', '')
         if status_ide and ide and pack and status_ide == ide:
-            return (pack, 'IDE rule: ' + ide + ' -> ' + pack, None, False, excluded_pattern)
+            return (pack, 'IDE rule: ' + ide + ' -> ' + pack, None, False, silenced_pattern)
 
     # 3. Rotation (if active).
     if rotation_list and rotation_mode in ('random', 'round-robin', 'shuffle'):
         # Rotation reason is redundant with the rotation list line shown below.
-        return (rotation_mode + ' rotation', None, None, True, excluded_pattern)
+        return (rotation_mode + ' rotation', None, None, True, silenced_pattern)
 
     # 4. Default (session_override note only).
     session_note = None
     if rotation_mode in ('session_override', 'agentskill'):
         session_note = 'session-override mode: per-session pack set via /peon-ping-use'
-    return (default_pack, None, session_note, False, excluded_pattern)
+    return (default_pack, None, session_note, False, silenced_pattern)
 
-resolved_pack, reason, session_note, is_rotation, excluded_pattern = resolve_active_pack()
+resolved_pack, reason, session_note, is_rotation, silenced_pattern = resolve_active_pack()
 resolved_display = default_display if resolved_pack == default_pack else get_display_name(resolved_pack)
 differs_from_default = resolved_pack != default_pack
 
@@ -1375,9 +1374,9 @@ else:
     pp('rotation list: none')
 pp('IDE source (status): ' + status_ide)
 pp('path rules: ' + str(len(rules)) + ' configured')
-if excluded_pattern:
-    pp('  path rules skipped here: cwd matched exclude_dirs -> ' + excluded_pattern)
-pp('excluded paths: ' + str(len(exclude_dirs)) + ' configured')
+pp('silenced dirs (exclude_dirs): ' + str(len(exclude_dirs)) + ' configured')
+if silenced_pattern:
+    pp('  SILENCED here: cwd matched exclude_dirs -> ' + silenced_pattern)
 pp('IDE rules: ' + str(len(ide_rules)) + ' configured')
 pp('installed: ' + str(pack_count) + ' pack(s)')
 
@@ -2294,6 +2293,22 @@ import json, os, fnmatch
 config_path = os.environ.get('PEON_ENV_CONFIG', '')
 cwd = os.getcwd()
 
+def _normalize_rule_path(value):
+    if not value:
+        return ''
+    expanded = os.path.expanduser(os.path.expandvars(str(value)))
+    norm = os.path.normpath(expanded).replace('\\\\', '/')
+    return norm.rstrip('/')
+
+def path_pattern_matches(path_value, pattern):
+    if not path_value or not pattern:
+        return False
+    p = _normalize_rule_path(path_value)
+    pat = _normalize_rule_path(pattern)
+    if any(ch in pat for ch in ['*', '?', '[']):
+        return fnmatch.fnmatch(p, pat)
+    return p == pat or p.startswith(pat + '/')
+
 try:
     cfg = json.load(open(config_path))
 except Exception:
@@ -2306,7 +2321,7 @@ else:
     for rule in path_rules:
         pattern = rule.get('pattern', '')
         pack = rule.get('pack', '')
-        marker = ' *' if fnmatch.fnmatch(cwd, pattern) else ''
+        marker = ' *' if path_pattern_matches(cwd, pattern) else ''
         print(f'  {pattern} -> {pack}{marker}')
 "
         exit 0 ;;
@@ -2543,27 +2558,28 @@ if action == 'add':
         print('Usage: peon packs exclude add <glob-or-dir>', file=sys.stderr)
         sys.exit(1)
     if pattern in exclude_dirs:
-        print(f'peon-ping: exclude path already present: {pattern}')
+        print(f'peon-ping: already silencing sounds in: {pattern}')
     else:
         exclude_dirs.append(pattern)
         cfg['exclude_dirs'] = exclude_dirs
         json.dump(cfg, open(config_path, 'w'), indent=2)
-        print(f'peon-ping: excluded path rule matching for {pattern}')
+        print(f'peon-ping: sounds & notifications silenced for {pattern}')
 elif action == 'remove':
     if not pattern:
         print('Usage: peon packs exclude remove <glob-or-dir>', file=sys.stderr)
         sys.exit(1)
     new_dirs = [item for item in exclude_dirs if item != pattern]
     if len(new_dirs) == len(exclude_dirs):
-        print(f'No excluded path found for \"{pattern}\".')
+        print(f'No silenced path found for \"{pattern}\".')
     else:
         cfg['exclude_dirs'] = new_dirs
         json.dump(cfg, open(config_path, 'w'), indent=2)
-        print(f'peon-ping: removed excluded path {pattern}')
+        print(f'peon-ping: no longer silencing {pattern}')
 elif action == 'list':
     if not exclude_dirs:
-        print('No excluded paths configured.')
+        print('No silenced paths configured.')
     else:
+        print('Silenced paths (no sounds or notifications when cwd matches):')
         for item in exclude_dirs:
             marker = ' *' if path_pattern_matches(cwd, item) else ''
             print(f'  {item}{marker}')
@@ -3691,9 +3707,9 @@ Pack management:
   packs ide-bind <ide> <pack> [--install]  Bind a pack to an IDE id
   packs ide-unbind <ide>  Remove an IDE binding
   packs ide-bindings      List all IDE-based pack bindings
-  packs exclude add <g>   Skip path_rules when cwd matches a glob or directory
-  packs exclude remove <g> Remove an excluded path
-  packs exclude list      List excluded paths
+  packs exclude add <g>   Silence sounds & notifications when cwd matches
+  packs exclude remove <g> Stop silencing the given path
+  packs exclude list      List silenced paths
   packs rotation list     Show current rotation list and mode
   packs rotation add <p>  Add pack(s) to rotation (comma-separated)
   packs rotation add --install <p>  Add to rotation, installing from registry if needed
@@ -4619,6 +4635,18 @@ session_ide = detect_session_ide(session_source, event_data, session_id)
 
 log('hook', event=event, session=session_id, cwd=cwd, paused=paused)
 
+# --- exclude_dirs: silence all sounds/notifications when cwd matches ---
+# Checked before state load so excluded dirs are cheap no-ops.
+_excluded_dir_pattern = next(
+    (pat for pat in (cfg.get('exclude_dirs', []) or []) if path_pattern_matches(cwd, pat)),
+    None,
+)
+if _excluded_dir_pattern:
+    log('route', category='none', suppressed=True, reason='excluded_dir', pattern=_excluded_dir_pattern)
+    log('exit', duration_ms=int((time.monotonic() - _peon_start) * 1000), exit=0)
+    print('PEON_EXIT=true')
+    sys.exit(0)
+
 # --- Load state ---
 state = read_state(state_file)
 
@@ -4682,17 +4710,16 @@ if recent_ide_sources != state.get('recent_ide_sources', {}):
 rotation_mode = cfg.get('pack_rotation_mode', 'random')
 
 # --- Path rules and IDE rules: first match wins in each layer ---
-# session_override > path_rules (unless excluded) > ide_rules > rotation > default_pack
+# session_override > path_rules > ide_rules > rotation > default_pack
+# Note: exclude_dirs is handled earlier as a full silence short-circuit.
 _path_rule_pack = None
-_path_rule_excluded = next((pat for pat in cfg.get('exclude_dirs', []) if path_pattern_matches(cwd, pat)), None)
-if not _path_rule_excluded:
-    for _rule in cfg.get('path_rules', []):
-        _pat = _rule.get('pattern', '')
-        _candidate = _rule.get('pack', '')
-        if cwd and _pat and _candidate and path_pattern_matches(cwd, _pat):
-            if os.path.isdir(os.path.join(peon_dir, 'packs', _candidate)):
-                _path_rule_pack = _candidate
-                break
+for _rule in cfg.get('path_rules', []):
+    _pat = _rule.get('pattern', '')
+    _candidate = _rule.get('pack', '')
+    if cwd and _pat and _candidate and path_pattern_matches(cwd, _pat):
+        if os.path.isdir(os.path.join(peon_dir, 'packs', _candidate)):
+            _path_rule_pack = _candidate
+            break
 
 _ide_rule_pack = None
 for _rule in cfg.get('ide_rules', []):

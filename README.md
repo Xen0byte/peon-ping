@@ -263,9 +263,9 @@ peon packs bindings       # List all assigned bindings
 peon packs ide-bind <ide> <name> # Bind a pack to an IDE id, e.g. codex
 peon packs ide-unbind <ide> # Remove an IDE binding
 peon packs ide-bindings   # List all IDE-based bindings
-peon packs exclude add <path> # Skip path_rules for a glob or directory
-peon packs exclude remove <path> # Remove an excluded path
-peon packs exclude list   # List excluded paths
+peon packs exclude add <path> # Silence sounds & notifications for a glob or directory
+peon packs exclude remove <path> # Stop silencing the given path
+peon packs exclude list   # List silenced paths
 peon notifications on     # Enable desktop notifications
 peon notifications off    # Disable desktop notifications
 peon notifications overlay   # Use large overlay banners (default)
@@ -433,7 +433,7 @@ This means you can:
     { "pattern": "*/personal/*",      "pack": "peon" }
   ]
   ```
-- **exclude_dirs**: Array of glob or directory patterns. If the current working directory matches one of these entries, `path_rules` are skipped and peon-ping falls through to `ide_rules`, rotation, or `default_pack`. Bare directory paths also match descendants, so `"~/conductor/workspaces"` excludes everything under that tree.
+- **exclude_dirs**: Array of glob or directory patterns. If the current working directory matches one of these entries, **all sounds and notifications are silenced** for that invocation (the hook logs `suppressed=True reason=excluded_dir pattern=<match>`). Bare directory paths also match descendants, so `"~/conductor/workspaces"` silences everything under that tree. Use this for noisy background agents (e.g. `CodexBar/ClaudeProbe`), throwaway scratch dirs, or sensitive workspaces where audio alerts are unwanted.
   ```json
   "exclude_dirs": [
     "~/conductor/workspaces",
@@ -478,7 +478,7 @@ peon-ping resolves which sound pack to use through a 6-layer hierarchy. The firs
 | 6 (lowest) | **hardcoded** | Built-in default | `"peon"` |
 
 If a layer references a pack that is not installed, it falls through to the next layer.
-If `exclude_dirs` matches the current working directory, the `path_rules` layer is skipped for that invocation.
+If `exclude_dirs` matches the current working directory, the entire invocation is silenced — no sound, no notification.
 
 ### Per-Project Pack Assignment (path_rules)
 
@@ -518,24 +518,18 @@ peon packs ide-bind codex glados        # Use glados for Codex sessions
 peon packs ide-bind claude peon         # Use peon for Claude Code
 peon packs ide-unbind codex             # Remove one IDE rule
 peon packs ide-bindings                 # List IDE rules and recent detections
-peon packs exclude add "~/conductor/workspaces"  # Skip path_rules under this tree
-peon packs exclude list                 # Show excluded paths
 ```
 
 **Manual config:**
 
 ```json
-"exclude_dirs": [
-  "~/conductor/workspaces",
-  "~/Library/Application Support/CodexBar*"
-],
 "ide_rules": [
   { "ide": "codex",  "pack": "glados" },
   { "ide": "claude", "pack": "peon" }
 ]
 ```
 
-`ide_rules` run after `path_rules`. Use `exclude_dirs` when you want to bypass path matching for specific workspaces or session directories.
+`ide_rules` run after `path_rules`.
 
 ## Common Use Cases
 

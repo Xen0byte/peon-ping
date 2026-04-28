@@ -899,21 +899,19 @@ if ($Command) {
                     if ($cfg.path_rules) { $rules = @($cfg.path_rules) }
                     $excludeDirs = @()
                     if ($cfg.exclude_dirs) { $excludeDirs = @($cfg.exclude_dirs) }
-                    $excludedPath = $null
+                    $silencedPath = $null
                     foreach ($pattern in $excludeDirs) {
                         if (Test-PathRuleMatch $PWD.Path $pattern) {
-                            $excludedPath = $pattern
+                            $silencedPath = $pattern
                             break
                         }
                     }
                     if ($rules.Count -gt 0) {
                         $activeRule = $null
-                        if (-not $excludedPath) {
-                            foreach ($r in $rules) {
-                                if (Test-PathRuleMatch $PWD.Path $r.pattern) {
-                                    $activeRule = $r
-                                    break
-                                }
+                        foreach ($r in $rules) {
+                            if (Test-PathRuleMatch $PWD.Path $r.pattern) {
+                                $activeRule = $r
+                                break
                             }
                         }
                         if ($activeRule) {
@@ -921,10 +919,10 @@ if ($Command) {
                         }
                         Write-Host "peon-ping: path rules: $($rules.Count) configured" -ForegroundColor Cyan
                     }
-                    if ($excludedPath) {
-                        Write-Host "peon-ping: path rules skipped here (exclude_dirs): $excludedPath" -ForegroundColor Cyan
+                    Write-Host "peon-ping: silenced dirs (exclude_dirs): $($excludeDirs.Count) configured" -ForegroundColor Cyan
+                    if ($silencedPath) {
+                        Write-Host "peon-ping: SILENCED here: cwd matched exclude_dirs -> $silencedPath" -ForegroundColor Yellow
                     }
-                    Write-Host "peon-ping: excluded paths: $($excludeDirs.Count) configured" -ForegroundColor Cyan
 
                     $ideRules = @()
                     if ($cfg.ide_rules) { $ideRules = @($cfg.ide_rules) }
@@ -1312,7 +1310,7 @@ if ($Command) {
                                 return
                             }
                             if ($pattern -in $excludeDirs) {
-                                Write-Host "peon-ping: exclude path already present: $pattern"
+                                Write-Host "peon-ping: already silencing sounds in: $pattern"
                                 return
                             }
                             $excludeDirs += $pattern
@@ -1322,7 +1320,7 @@ if ($Command) {
                                 $cfgObj | Add-Member -NotePropertyName 'exclude_dirs' -NotePropertyValue $excludeDirs
                             }
                             Set-PeonConfig $cfgObj $ConfigPath
-                            Write-Host "peon-ping: excluded path rule matching for $pattern"
+                            Write-Host "peon-ping: sounds & notifications silenced for $pattern"
                             return
                         }
                         "remove" {
@@ -1332,7 +1330,7 @@ if ($Command) {
                             }
                             $newDirs = @($excludeDirs | Where-Object { $_ -ne $pattern })
                             if ($newDirs.Count -eq $excludeDirs.Count) {
-                                Write-Host "No excluded path found for `"$pattern`"."
+                                Write-Host "No silenced path found for `"$pattern`"."
                                 return
                             }
                             if ($cfgObj.PSObject.Properties['exclude_dirs']) {
@@ -1341,14 +1339,15 @@ if ($Command) {
                                 $cfgObj | Add-Member -NotePropertyName 'exclude_dirs' -NotePropertyValue $newDirs
                             }
                             Set-PeonConfig $cfgObj $ConfigPath
-                            Write-Host "peon-ping: removed excluded path $pattern"
+                            Write-Host "peon-ping: no longer silencing $pattern"
                             return
                         }
                         "list" {
                             if ($excludeDirs.Count -eq 0) {
-                                Write-Host "No excluded paths configured."
+                                Write-Host "No silenced paths configured."
                                 return
                             }
+                            Write-Host "Silenced paths (no sounds or notifications when cwd matches):"
                             foreach ($item in $excludeDirs) {
                                 $marker = if (Test-PathRuleMatch $PWD.Path $item) { " *" } else { "" }
                                 Write-Host "  $item$marker"
@@ -1805,7 +1804,7 @@ if ($Command) {
             Write-Host "  --packs ide-bind      Bind a pack to an IDE id"
             Write-Host "  --packs ide-unbind    Remove an IDE binding"
             Write-Host "  --packs ide-bindings  List all IDE bindings"
-            Write-Host "  --packs exclude       Manage excluded paths for path_rules"
+            Write-Host "  --packs exclude       Silence sounds & notifications for matching paths"
             Write-Host "  --pack [name]         Switch pack (or cycle)"
             Write-Host ""
             Write-Host "Trainer:" -ForegroundColor Cyan
@@ -2399,6 +2398,23 @@ if ($_permMode -and $_agentModes -contains $_permMode) {
     exit 0
 }
 
+# --- exclude_dirs: silence sounds & notifications when cwd matches ---
+$_excludedDirPattern = $null
+if ($cwd -and $config.exclude_dirs) {
+    foreach ($_pat in $config.exclude_dirs) {
+        if ($_pat -and (Test-PathRuleMatch $cwd $_pat)) {
+            $_excludedDirPattern = $_pat
+            break
+        }
+    }
+}
+if ($_excludedDirPattern) {
+    & $peonLog 'route' @{ category = 'none'; suppressed = 'True'; reason = 'excluded_dir'; pattern = $_excludedDirPattern }
+    & $peonLog 'exit' @{ duration_ms = [string]$_peonStart.ElapsedMilliseconds; exit = '0' }
+    try { if ($stateDirty) { Write-StateAtomic -State $state -Path $StatePath } } catch { <# state write best-effort #> }
+    exit 0
+}
+
 # --- Map Claude Code hook event -> CESP manifest category ---
 $category = $null
 $ntype = $event.notification_type
@@ -2575,20 +2591,11 @@ $rotationMode = $config.pack_rotation_mode
 if (-not $rotationMode) { $rotationMode = "random" }
 
 # --- Path rules and IDE rules: first matching layer wins ---
-# session_override > path_rules (unless excluded) > ide_rules > rotation > default_pack
+# session_override > path_rules > ide_rules > rotation > default_pack
+# Note: exclude_dirs is handled earlier as a full silence short-circuit.
 $pathRulePack = $null
-$pathRuleExcluded = $null
-$excludeDirs = $config.exclude_dirs
-if ($cwd -and $excludeDirs) {
-    foreach ($excludePattern in $excludeDirs) {
-        if (Test-PathRuleMatch $cwd $excludePattern) {
-            $pathRuleExcluded = $excludePattern
-            break
-        }
-    }
-}
 $pathRules = $config.path_rules
-if ($cwd -and $pathRules -and -not $pathRuleExcluded) {
+if ($cwd -and $pathRules) {
     foreach ($rule in $pathRules) {
         $pattern = $rule.pattern
         $candidate = $rule.pack

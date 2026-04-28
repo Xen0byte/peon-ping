@@ -3512,7 +3512,7 @@ JSON
   [[ "$sound" == *"/packs/peon/sounds/"* ]]
 }
 
-@test "exclude_dirs: bare directory pattern skips path_rules for descendants" {
+@test "exclude_dirs: bare directory pattern silences all sounds for descendants" {
   cat > "$TEST_DIR/config.json" <<'JSON'
 {
   "default_pack": "peon", "volume": 0.5, "enabled": true,
@@ -3527,9 +3527,22 @@ JSON
 JSON
   run_peon '{"hook_event_name":"Stop","cwd":"'"$HOME"'/conductor/workspaces/peon-ping/windhoek","session_id":"ex1","permission_mode":"default"}'
   [ "$PEON_EXIT" -eq 0 ]
-  afplay_was_called
-  sound=$(afplay_sound)
-  [[ "$sound" == *"/packs/peon/sounds/"* ]]
+  ! afplay_was_called
+}
+
+@test "exclude_dirs: glob pattern silences matching cwd (CodexBar/ClaudeProbe case)" {
+  cat > "$TEST_DIR/config.json" <<'JSON'
+{
+  "default_pack": "peon", "volume": 0.5, "enabled": true,
+  "categories": { "session.start": true },
+  "exclude_dirs": [
+    "~/Library/Application Support/CodexBar*"
+  ]
+}
+JSON
+  run_peon '{"hook_event_name":"SessionStart","cwd":"'"$HOME"'/Library/Application Support/CodexBar/ClaudeProbe","session_id":"codexbar1","permission_mode":"default"}'
+  [ "$PEON_EXIT" -eq 0 ]
+  ! afplay_was_called
 }
 
 @test "ide_rules: matching source uses the specified pack" {
@@ -3569,7 +3582,7 @@ JSON
   [[ "$sound" == *"/packs/peon/sounds/"* ]]
 }
 
-@test "exclude_dirs: ide_rules still apply when path_rules are skipped" {
+@test "exclude_dirs: silences even when ide_rules would otherwise match" {
   cat > "$TEST_DIR/config.json" <<'JSON'
 {
   "default_pack": "peon", "volume": 0.5, "enabled": true,
@@ -3587,9 +3600,7 @@ JSON
 JSON
   run_peon '{"hook_event_name":"Stop","source":"codex","cwd":"'"$HOME"'/conductor/workspaces/peon-ping/windhoek","session_id":"ex2","permission_mode":"default"}'
   [ "$PEON_EXIT" -eq 0 ]
-  afplay_was_called
-  sound=$(afplay_sound)
-  [[ "$sound" == *"/packs/sc_kerrigan/sounds/"* ]]
+  ! afplay_was_called
 }
 
 # ============================================================
@@ -4464,7 +4475,7 @@ json.dump(c, open('$TEST_DIR/config.json', 'w'))
 @test "packs exclude add stores exclude_dirs entry" {
   run bash "$PEON_SH" packs exclude add "~/conductor/workspaces"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"excluded path rule matching"* ]]
+  [[ "$output" == *"sounds & notifications silenced for ~/conductor/workspaces"* ]]
   rules=$(/usr/bin/python3 -c "import json; c=json.load(open('$TEST_DIR/config.json')); print(len(c.get('exclude_dirs', [])))")
   [ "$rules" = "1" ]
 }
@@ -4473,7 +4484,7 @@ json.dump(c, open('$TEST_DIR/config.json', 'w'))
   bash "$PEON_SH" packs exclude add "~/conductor/workspaces" >/dev/null
   run bash "$PEON_SH" packs exclude remove "~/conductor/workspaces"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"removed excluded path"* ]]
+  [[ "$output" == *"no longer silencing ~/conductor/workspaces"* ]]
   rules=$(/usr/bin/python3 -c "import json; c=json.load(open('$TEST_DIR/config.json')); print(len(c.get('exclude_dirs', [])))")
   [ "$rules" = "0" ]
 }
