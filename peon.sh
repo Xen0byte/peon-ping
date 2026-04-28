@@ -1403,6 +1403,7 @@ nd = c.get('notification_dismiss_seconds', 4)
 pp('dismiss: ' + (str(nd) + 's' if nd > 0 else 'persistent (click to dismiss)'))
 all_screens = c.get('notification_all_screens', True)
 pp('all screens: ' + ('yes' if all_screens else 'no'))
+pp('title includes IDE: ' + ('yes' if c.get('notification_title_ide', False) else 'no'))
 _lbl = c.get('notification_title_override', '')
 if _lbl:
     pp('label override: ' + _lbl)
@@ -3497,6 +3498,10 @@ if 'idle_prompt_suppress_window_seconds' not in cfg:
     cfg['idle_prompt_suppress_window_seconds'] = 3600
     changed = True
     migrations.append('idle_prompt_suppress_window_seconds')
+if 'notification_title_ide' not in cfg:
+    cfg['notification_title_ide'] = False
+    changed = True
+    migrations.append('notification_title_ide')
 if changed:
     json.dump(cfg, open(config_path, 'w'), indent=2)
     print('peon-ping: config keys updated (' + ', '.join(migrations) + ')')
@@ -4620,6 +4625,30 @@ def detect_session_ide(source_value, event_payload, session_value):
             return ide
     return 'claude'
 
+IDE_DISPLAY_NAMES = {
+    'claude': 'Claude Code',
+    'codex': 'OpenAI Codex',
+    'cursor': 'Cursor',
+    'opencode': 'OpenCode',
+    'kilo': 'Kilo CLI',
+    'kiro': 'Kiro',
+    'gemini': 'Gemini CLI',
+    'copilot': 'GitHub Copilot',
+    'windsurf': 'Windsurf',
+    'kimi': 'Kimi Code',
+    'antigravity': 'Antigravity',
+    'amp': 'Amp',
+    'deepagents': 'DeepAgents',
+    'openclaw': 'OpenClaw',
+    'rovodev': 'Rovo Dev CLI',
+}
+
+def display_ide_name(ide_id):
+    key = normalize_ide_id(ide_id)
+    if not key:
+        return ''
+    return IDE_DISPLAY_NAMES.get(key, key.replace('-', ' ').title())
+
 def normalize_path_value(value):
     raw = str(value or '').strip()
     if not raw:
@@ -4883,7 +4912,8 @@ if not project:
         try:
             import subprocess as _sp
             _env = {**os.environ, 'PEON_SESSION_ID': session_id or '', 'PEON_CWD': cwd or '',
-                    'PEON_HOOK_EVENT': event or '', 'PEON_SESSION_NAME': os.environ.get('CLAUDE_SESSION_NAME', '')}
+                    'PEON_HOOK_EVENT': event or '', 'PEON_IDE': session_ide or '',
+                    'PEON_SESSION_NAME': os.environ.get('CLAUDE_SESSION_NAME', '')}
             _r = _sp.run(_script, shell=True, capture_output=True, text=True, timeout=2, env=_env)
             _out = _r.stdout.strip()[:50]
             if _r.returncode == 0 and _out:
@@ -4926,6 +4956,16 @@ if not project:
     else:
         project = 'claude'
 project = re.sub(r'[^a-zA-Z0-9 ._-]', '', project)
+ide_label = display_ide_name(session_ide)
+notification_project = f'{project} - {ide_label}' if cfg.get('notification_title_ide', False) and ide_label else project
+
+def notification_message(status_value, *details):
+    parts = [str(status_value or '').strip()]
+    parts.extend(str(detail or '').strip() for detail in details)
+    parts = [part for part in parts if part]
+    if len(parts) <= 1:
+        return parts[0] if parts else ''
+    return parts[0] + ': ' + ' - '.join(parts[1:])
 
 # --- Event routing ---
 category = ''
@@ -5014,7 +5054,7 @@ elif event == 'Stop':
         marker = '\u25cf '
         notify = '1'
         notify_color = 'blue'
-        msg = project
+        msg = notification_message(status)
         msg_subtitle = ''
     else:
         category = ''
@@ -5029,15 +5069,14 @@ elif event == 'Notification':
         marker = '\u25cf '
         notify = '1'
         notify_color = 'yellow'
-        msg = project
+        msg = notification_message(status)
     elif ntype == 'elicitation_dialog':
         category = 'input.required'
         status = 'question'
         marker = '\u25cf '
         notify = '1'
         notify_color = 'blue'
-        msg = project
-        msg_subtitle = 'Question pending'
+        msg = notification_message(status, 'Question pending')
     else:
         # Unknown notification type — maintain tab title (e.g. plan mode events)
         log('route', category='none', suppressed=True, reason='unknown_notification')
@@ -5060,9 +5099,8 @@ elif event == 'PermissionRequest':
     marker = '\u25cf '
     notify = '1'
     notify_color = 'red'
-    msg = project
     _tool = event_data.get('tool_name', '')
-    msg_subtitle = _tool
+    msg = notification_message(status, _tool)
 elif event == 'PostToolUseFailure':
     # Bash failures arrive here with error field (e.g. Exit code 1)
     tool_name = event_data.get('tool_name', '')
@@ -5096,7 +5134,7 @@ elif event == 'SubagentStop':
     marker = '\u25cf '
     notify = '1'
     notify_color = 'blue'
-    msg = project
+    msg = notification_message(status)
     msg_subtitle = ''
 elif event == 'SubagentStart':
     # Record parent's pack so spawned subagent sessions inherit it, then stay silent
@@ -5118,7 +5156,7 @@ elif event == 'PreCompact':
     marker = '\u25cf '
     notify = '1'
     notify_color = 'red'
-    msg = project + '  \u2014  Context compacting'
+    msg = notification_message(status, 'Context compacting')
 elif event == 'SessionEnd':
     # Clean up state for this session
     for key in ('session_packs', 'prompt_timestamps', 'session_start_times', 'prompt_start_times', 'subagent_sessions', 'last_task_complete'):
@@ -5482,6 +5520,8 @@ _tpl_vars = _defaultdict(str, {
     'tool_name': event_data.get('tool_name', ''),
     'status': status,
     'event': event,
+    'ide': ide_label,
+    'ide_id': session_ide,
 })
 if _tpl:
     try:
@@ -5555,6 +5595,7 @@ elif event == 'Notification':
     elif ntype == 'elicitation_dialog': _notify_type = 'question'
 print('NOTIFY_TYPE=' + q(_notify_type))
 print('MSG=' + q(msg))
+print('NOTIFY_PROJECT=' + q(notification_project))
 print('MSG_SUBTITLE=' + q(msg_subtitle))
 print('DESKTOP_NOTIF=' + ('true' if desktop_notif else 'false'))
 print('NOTIF_STYLE=' + q(cfg.get('notification_style', 'overlay')))
@@ -5775,6 +5816,7 @@ fi
 
 # --- Build tab title ---
 TITLE="${NOTIF_MARKER-${MARKER}}${PROJECT}: ${STATUS}"
+NOTIFY_TITLE="${NOTIF_MARKER-${MARKER}}${NOTIFY_PROJECT:-$PROJECT}"
 
 # --- Resolve TTY for escape sequences ---
 # Write to /dev/tty so the escape sequence reaches the terminal directly.
@@ -5900,12 +5942,12 @@ _run_sound_and_notify() {
   # --- Smart notification: only when terminal is NOT frontmost ---
   if [ -n "$NOTIFY" ] && [ "$PAUSED" != "true" ] && [ "${DESKTOP_NOTIF:-true}" = "true" ]; then
     [ -z "$_focused" ] && { terminal_is_focused && _focused=true || _focused=false; }
-    [ "$_focused" != "true" ] && send_notification "$MSG" "$TITLE" "${NOTIFY_COLOR:-red}" "${ICON_PATH:-}"
+    [ "$_focused" != "true" ] && send_notification "$MSG" "$NOTIFY_TITLE" "${NOTIFY_COLOR:-red}" "${ICON_PATH:-}"
   fi
 
   # --- Mobile push notification (always sends when configured, regardless of focus) ---
   if [ -n "$NOTIFY" ] && [ "$PAUSED" != "true" ] && [ "${MOBILE_NOTIF:-false}" = "true" ]; then
-    send_mobile_notification "$MSG" "$TITLE" "${NOTIFY_COLOR:-red}"
+    send_mobile_notification "$MSG" "$NOTIFY_TITLE" "${NOTIFY_COLOR:-red}"
   fi
 }
 

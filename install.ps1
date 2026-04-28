@@ -251,6 +251,7 @@ if (-not $Updating) {
         path_rules = @()
         exclude_dirs = @()
         ide_rules = @()
+        notification_title_ide = $false
         tts = @{
             enabled = $false
             backend = "auto"
@@ -1759,9 +1760,13 @@ if ($Command) {
                 $cfgObj | Add-Member -NotePropertyName 'ide_rules' -NotePropertyValue @() -Force
                 $changed = $true
             }
+            if (-not $cfgObj.PSObject.Properties['notification_title_ide']) {
+                $cfgObj | Add-Member -NotePropertyName 'notification_title_ide' -NotePropertyValue $false -Force
+                $changed = $true
+            }
             if ($changed) {
                 $cfgObj | ConvertTo-Json -Depth 10 | Set-Content $ConfigPath -Encoding UTF8
-                Write-Host "peon-ping: config migrated (active_pack -> default_pack, agentskill -> session_override, exclude_dirs, ide_rules)" -ForegroundColor Green
+                Write-Host "peon-ping: config migrated (active_pack -> default_pack, agentskill -> session_override, exclude_dirs, ide_rules, notification_title_ide)" -ForegroundColor Green
             }
             # Re-run install.ps1 from a temp directory. Download install-utils.ps1
             # alongside it so the dot-source resolves correctly via $PSScriptRoot.
@@ -2206,7 +2211,7 @@ try {
 } catch {
     $_configError = "$_"
 # Fall back to minimal defaults so the hook can still run (logging requires PEON_DEBUG=1 when config is broken)
-    $config = [PSCustomObject]@{ enabled = $true; debug = $false; volume = 0.5; debug_retention_days = 7; notification_title_marker = '●' }
+    $config = [PSCustomObject]@{ enabled = $true; debug = $false; volume = 0.5; debug_retention_days = 7; notification_title_marker = '●'; notification_title_ide = $false }
 }
 
 # NOTE: enabled check moved below logging init so paused invocations are visible in debug logs
@@ -2324,6 +2329,35 @@ $sessionIde = Detect-SessionIde -Event $event -SessionId $sessionId -Source $ses
 $project = if ($cwd) { Split-Path $cwd -Leaf } else { "" }
 if (-not $project) { $project = "claude" }
 $project = $project -replace '[^a-zA-Z0-9 ._-]', ''
+
+# IDE display names (parity with peon.sh IDE_DISPLAY_NAMES)
+$ideDisplayNames = @{
+    'claude' = 'Claude Code'
+    'codex' = 'OpenAI Codex'
+    'cursor' = 'Cursor'
+    'opencode' = 'OpenCode'
+    'kilo' = 'Kilo CLI'
+    'kiro' = 'Kiro'
+    'gemini' = 'Gemini CLI'
+    'copilot' = 'GitHub Copilot'
+    'windsurf' = 'Windsurf'
+    'kimi' = 'Kimi Code'
+    'antigravity' = 'Antigravity'
+    'amp' = 'Amp'
+    'deepagents' = 'DeepAgents'
+    'openclaw' = 'OpenClaw'
+    'rovodev' = 'Rovo Dev CLI'
+}
+$ideLabel = ''
+if ($sessionIde) {
+    $ideKey = (Normalize-IdeId $sessionIde)
+    if ($ideKey -and $ideDisplayNames.ContainsKey($ideKey)) {
+        $ideLabel = $ideDisplayNames[$ideKey]
+    } elseif ($ideKey) {
+        $ideLabel = (Get-Culture).TextInfo.ToTitleCase(($ideKey -replace '-', ' '))
+    }
+}
+$notificationProject = if ($config.notification_title_ide -and $ideLabel) { "$project - $ideLabel" } else { $project }
 
 # Log hook phase
 $_isPaused = if ($config.enabled) { 'False' } else { 'True' }
@@ -2448,8 +2482,8 @@ switch ($hookEvent) {
         } else {
             $notify = $true
             $notifyColor = "blue"
-            $notifyMsg = $project
             $notifyStatus = "done"
+            $notifyMsg = $notifyStatus
         }
         $state["last_stop_time"] = $now
     }
@@ -2462,14 +2496,14 @@ switch ($hookEvent) {
             $category = $null
             $notify = $true
             $notifyColor = "yellow"
-            $notifyMsg = $project
             $notifyStatus = "done"
+            $notifyMsg = $notifyStatus
         } elseif ($ntype -eq "elicitation_dialog") {
             $category = "input.required"
             $notify = $true
             $notifyColor = "blue"
-            $notifyMsg = $project
             $notifyStatus = "question"
+            $notifyMsg = "$notifyStatus`: Question pending"
         } else {
             # Other notification types (e.g., tool results) map to task.complete
             $category = "task.complete"
@@ -2479,15 +2513,16 @@ switch ($hookEvent) {
         $category = "input.required"
         $notify = $true
         $notifyColor = "red"
-        $notifyMsg = $project
         $notifyStatus = "needs approval"
+        $_tool = if ($event.tool_name) { [string]$event.tool_name } else { "" }
+        $notifyMsg = if ($_tool) { "$notifyStatus`: $_tool" } else { $notifyStatus }
     }
     "PreCompact" {
         $category = "resource.limit"
         $notify = $true
         $notifyColor = "red"
-        $notifyMsg = $project
         $notifyStatus = "context limit"
+        $notifyMsg = "$notifyStatus`: Context compacting"
     }
     "UserPromptSubmit" {
         # Detect rapid prompts for "annoyed" easter egg
@@ -3071,7 +3106,7 @@ if ($notify -and $desktopNotif) {
     $winNotifyScript = Join-Path $InstallDir "scripts\win-notify.ps1"
     if (Test-Path $winNotifyScript) {
 $marker = if ($config.notification_title_marker) { $config.notification_title_marker } else { [char]0x25CF }
-        $notifTitle = "$marker $project`: $notifyStatus"
+        $notifTitle = "$marker $notificationProject"
         $dismissSecs = if ($config.notification_dismiss_seconds) { $config.notification_dismiss_seconds } else { 4 }
         # Resolve parent PID (the IDE/terminal that spawned Claude Code) for click-to-focus
         $parentPid = 0

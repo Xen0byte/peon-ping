@@ -774,6 +774,90 @@ json.dump(cfg, open('$TEST_DIR/config.json', 'w'))
   grep -q "codex" "$TEST_DIR/terminal_notifier.log"
 }
 
+@test "desktop notification title omits IDE label by default" {
+  /usr/bin/python3 -c "
+import json
+cfg = json.load(open('$TEST_DIR/config.json'))
+cfg['notification_style'] = 'standard'
+json.dump(cfg, open('$TEST_DIR/config.json', 'w'))
+"
+  run_peon '{"hook_event_name":"Stop","cwd":"/tmp/myproject","session_id":"codex-456","source":"codex","permission_mode":"default"}'
+  [ "$PEON_EXIT" -eq 0 ]
+  [ -f "$TEST_DIR/terminal_notifier.log" ]
+  grep -q "myproject" "$TEST_DIR/terminal_notifier.log"
+  ! grep -q "myproject - OpenAI Codex" "$TEST_DIR/terminal_notifier.log"
+  grep -q -- "-message done" "$TEST_DIR/terminal_notifier.log"
+}
+
+@test "desktop notification title includes detected IDE label when enabled" {
+  /usr/bin/python3 -c "
+import json
+cfg = json.load(open('$TEST_DIR/config.json'))
+cfg['notification_style'] = 'standard'
+cfg['notification_title_ide'] = True
+json.dump(cfg, open('$TEST_DIR/config.json', 'w'))
+"
+  run_peon '{"hook_event_name":"Stop","cwd":"/tmp/myproject","session_id":"codex-456","source":"codex","permission_mode":"default"}'
+  [ "$PEON_EXIT" -eq 0 ]
+  [ -f "$TEST_DIR/terminal_notifier.log" ]
+  grep -q "myproject - OpenAI Codex" "$TEST_DIR/terminal_notifier.log"
+  grep -q -- "-message done" "$TEST_DIR/terminal_notifier.log"
+}
+
+@test "desktop notification message includes status and details" {
+  /usr/bin/python3 -c "
+import json
+cfg = json.load(open('$TEST_DIR/config.json'))
+cfg['notification_style'] = 'standard'
+json.dump(cfg, open('$TEST_DIR/config.json', 'w'))
+"
+  run_peon '{"hook_event_name":"PermissionRequest","cwd":"/tmp/myproject","session_id":"codex-789","source":"codex","permission_mode":"default","tool_name":"Bash"}'
+  [ "$PEON_EXIT" -eq 0 ]
+  [ -f "$TEST_DIR/terminal_notifier.log" ]
+  grep -q "myproject" "$TEST_DIR/terminal_notifier.log"
+  ! grep -q "myproject - OpenAI Codex" "$TEST_DIR/terminal_notifier.log"
+  grep -q -- "-message needs approval: Bash" "$TEST_DIR/terminal_notifier.log"
+}
+
+@test "desktop notification title renders Claude Code label for claude source" {
+  /usr/bin/python3 -c "
+import json
+cfg = json.load(open('$TEST_DIR/config.json'))
+cfg['notification_style'] = 'standard'
+cfg['notification_title_ide'] = True
+json.dump(cfg, open('$TEST_DIR/config.json', 'w'))
+"
+  run_peon '{"hook_event_name":"Stop","cwd":"/tmp/myproject","session_id":"claude-1","source":"claude","permission_mode":"default"}'
+  [ "$PEON_EXIT" -eq 0 ]
+  grep -q "myproject - Claude Code" "$TEST_DIR/terminal_notifier.log"
+}
+
+@test "desktop notification title titlecases unknown IDE id when flag enabled" {
+  /usr/bin/python3 -c "
+import json
+cfg = json.load(open('$TEST_DIR/config.json'))
+cfg['notification_style'] = 'standard'
+cfg['notification_title_ide'] = True
+json.dump(cfg, open('$TEST_DIR/config.json', 'w'))
+"
+  run_peon '{"hook_event_name":"Stop","cwd":"/tmp/myproject","session_id":"x-1","source":"my-cool-ide","permission_mode":"default"}'
+  [ "$PEON_EXIT" -eq 0 ]
+  grep -q "myproject - My Cool Ide" "$TEST_DIR/terminal_notifier.log"
+}
+
+@test "{ide_id} template variable renders the raw normalized id" {
+  /usr/bin/python3 -c "
+import json
+cfg = json.load(open('$TEST_DIR/config.json'))
+cfg['notification_style'] = 'standard'
+cfg['notification_templates'] = {'stop': '{ide_id}/{ide}: done'}
+json.dump(cfg, open('$TEST_DIR/config.json', 'w'))
+"
+  run_peon '{"hook_event_name":"Stop","cwd":"/tmp/myproject","session_id":"codex-9","source":"codex","permission_mode":"default"}'
+  [ "$PEON_EXIT" -eq 0 ]
+  grep -q -- "-message codex/OpenAI Codex: done" "$TEST_DIR/terminal_notifier.log"
+}
+
 @test "state session_names overrides project name (set via /peon-ping-rename)" {
   /usr/bin/python3 -c "
 import json
@@ -850,6 +934,22 @@ json.dump(cfg, open('$TEST_DIR/config.json', 'w'))
   [ "$PEON_EXIT" -eq 0 ]
   [ -f "$TEST_DIR/terminal_notifier.log" ]
   grep -q "Scripted" "$TEST_DIR/terminal_notifier.log"
+}
+
+@test "notification_title_script receives PEON_IDE" {
+  /usr/bin/python3 -c "
+import json
+cfg = json.load(open('$TEST_DIR/config.json'))
+cfg['notification_style'] = 'standard'
+cfg['notification_title_script'] = 'printf \"%s\" \"\$PEON_IDE\"'
+json.dump(cfg, open('$TEST_DIR/config.json', 'w'))
+"
+  run_peon '{"hook_event_name":"Stop","source":"codex","cwd":"/tmp/myproject","session_id":"s1","permission_mode":"default"}'
+  [ "$PEON_EXIT" -eq 0 ]
+  [ -f "$TEST_DIR/terminal_notifier.log" ]
+  grep -q "codex" "$TEST_DIR/terminal_notifier.log"
+  ! grep -q "OpenAI Codex" "$TEST_DIR/terminal_notifier.log"
+  grep -q -- "-message done" "$TEST_DIR/terminal_notifier.log"
 }
 
 @test "notification_title_script non-zero exit falls through to next tier" {

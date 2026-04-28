@@ -716,6 +716,19 @@ json.dump(cfg, open('$TEST_DIR/config.json', 'w'), indent=2)
   [[ "$(overlay_log)" == *"myproject: Fixed the login bug"* ]]
 }
 
+@test "template: Stop with {ide} renders detected IDE label" {
+  python3 -c "
+import json
+cfg = json.load(open('$TEST_DIR/config.json'))
+cfg['notification_templates'] = {'stop': '{ide}: {project}'}
+json.dump(cfg, open('$TEST_DIR/config.json', 'w'), indent=2)
+"
+  run_peon '{"hook_event_name":"Stop","source":"codex","cwd":"/tmp/myproject","session_id":"codex-1","permission_mode":"default"}'
+  [ "$PEON_EXIT" -eq 0 ]
+  overlay_was_called
+  [[ "$(overlay_log)" == *"OpenAI Codex: myproject"* ]]
+}
+
 @test "template: Stop without transcript_summary renders empty summary" {
   python3 -c "
 import json

@@ -240,18 +240,23 @@ case "$PEON_PLATFORM" in
           fi
         fi
 
+        # Prepend count badge if stacked
+        if [ "$count" -gt 1 ]; then
+          msg="($count) $msg"
+        fi
+
         local session_tty="${PEON_SESSION_TTY:-}"
+        local overlay_msg="$msg"
         local subtitle="${PEON_MSG_SUBTITLE:-}"
+        if [ -n "$title" ]; then
+          overlay_msg="$title"
+          [ -n "$msg" ] && [ -z "$subtitle" ] && subtitle="$msg"
+        fi
         local dismiss_secs="${PEON_NOTIF_DISMISS:-4}"
         local notif_position="${PEON_NOTIF_POSITION:-top-center}"
         local notify_type="${PEON_NOTIFY_TYPE:-}"
         local all_screens="${PEON_NOTIF_ALL_SCREENS:-true}"
         local close_button="${PEON_NOTIF_CLOSE_BUTTON:-true}"
-
-        # Prepend count badge if stacked
-        if [ "$count" -gt 1 ]; then
-          msg="($count) $msg"
-        fi
 
         # argv[5]=bundle_id, argv[6]=ide_pid, argv[7]=session_tty, argv[8]=subtitle, argv[9]=position, argv[10]=notify_type, argv[11]=all_screens, argv[12]=screen_index, argv[13]=close_button
         local _overlay_pids=""
@@ -266,11 +271,11 @@ case "$PEON_PLATFORM" in
             screen_count=1
           fi
           for _si in $(seq 0 $((screen_count - 1))); do
-            osascript -l JavaScript "$overlay_script" "$msg" "$color" "$local_icon_arg" "$slot" "$dismiss_secs" "$bundle_id" "$ide_pid" "$session_tty" "$subtitle" "$notif_position" "$notify_type" "$all_screens" "$_si" "$close_button" >/dev/null 2>&1 &
+            osascript -l JavaScript "$overlay_script" "$overlay_msg" "$color" "$local_icon_arg" "$slot" "$dismiss_secs" "$bundle_id" "$ide_pid" "$session_tty" "$subtitle" "$notif_position" "$notify_type" "$all_screens" "$_si" "$close_button" >/dev/null 2>&1 &
             _overlay_pids="$_overlay_pids $!"
           done
         else
-          osascript -l JavaScript "$overlay_script" "$msg" "$color" "$local_icon_arg" "$slot" "$dismiss_secs" "$bundle_id" "$ide_pid" "$session_tty" "$subtitle" "$notif_position" "$notify_type" "$all_screens" "" "$close_button" >/dev/null 2>&1 &
+          osascript -l JavaScript "$overlay_script" "$overlay_msg" "$color" "$local_icon_arg" "$slot" "$dismiss_secs" "$bundle_id" "$ide_pid" "$session_tty" "$subtitle" "$notif_position" "$notify_type" "$all_screens" "" "$close_button" >/dev/null 2>&1 &
           _overlay_pids="$!"
         fi
         # Save session state for stacking
