@@ -1002,6 +1002,22 @@ bash ~/.claude/hooks/peon-ping/adapters/kimi.sh --uninstall
 
 macOS では `fswatch`（`brew install fswatch`）、Linux では `inotifywait`（`apt install inotify-tools`）が必要。`curl | bash` インストーラーは Kimi Code を自動検出してデーモンを起動します。
 
+**macOS では `--install` が LaunchAgent を登録します**（`~/Library/LaunchAgents/com.peonping.kimi-adapter.plist`）。ウォッチャーはログイン時に自動起動し、クラッシュ時には自動的に再起動します — 再起動後に `--install` を再実行する必要はありません。テスト用などに `nohup`+pidfile にフォールバックするには `KIMI_NO_LAUNCHD=1` を設定してください。Linux は常に `nohup`+pidfile を使用します。
+
+**Kimi 専用インストール（Claude 不要）：**
+
+Claude Code がなく、Kimi 用にだけ peon-ping をインストールしたい場合は `--kimi` を使用：
+
+```bash
+curl -fsSL peonping.com/install | bash -s -- --kimi
+```
+
+ファイルは `~/.claude/hooks/peon-ping/` ではなく `~/.kimi/hooks/peon-ping/` にインストールされ、`~/.claude/` ディレクトリは作成されません。インストーラーは自動検出も行います。`~/.kimi/` があり `~/.claude/` がないマシンで引数なしで実行すると、自動的に `--kimi` モードが選択されます。ウォッチャーデーモンはインストール時に起動し、LaunchAgent によりログインのたびに再起動します。
+
+**Claude インストールとボイスパックを共有：**
+
+`~/.claude/hooks/peon-ping/packs/` に既にパックが存在する場合、`--kimi` インストールは再ダウンロードする代わりに `~/.kimi/hooks/peon-ping/packs` をそこへシンボリックリンクします。一度のダウンロードで両方の IDE に対応し、どちらから `peon packs install <name>` を実行しても共有パックセットが更新されます。状態、設定、ミュート切り替えはインストールごとに独立しています。`--no-shared-packs`（または `--packs=` / `--all`）を渡すと、別のコピーをダウンロードします。
+
 **イベントマッピング：**
 
 - 新しいセッション → 挨拶サウンド（*"Ready to work?"*、*"Yes?"*）

@@ -988,6 +988,22 @@ bash ~/.claude/hooks/peon-ping/adapters/kimi.sh --uninstall
 
 macOS 需要 `fswatch`（`brew install fswatch`），Linux 需要 `inotifywait`（`apt install inotify-tools`）。`curl | bash` 安装器会自动检测 Kimi Code 并启动守护进程。
 
+**macOS 上 `--install` 会注册 LaunchAgent**（`~/Library/LaunchAgents/com.peonping.kimi-adapter.plist`），监听器会在登录时自动启动并在崩溃时自动重启 — 重启后无需重新运行 `--install`。设置 `KIMI_NO_LAUNCHD=1` 可回退到 `nohup`+pidfile（例如用于测试）。Linux 始终使用 `nohup`+pidfile。
+
+**仅 Kimi 安装（无需 Claude）：**
+
+如果你没有 Claude Code，只想给 Kimi 装 peon-ping，使用 `--kimi`：
+
+```bash
+curl -fsSL peonping.com/install | bash -s -- --kimi
+```
+
+文件会安装到 `~/.kimi/hooks/peon-ping/` 而不是 `~/.claude/hooks/peon-ping/`，也不会创建 `~/.claude/` 目录。安装器还会自动检测：在仅有 `~/.kimi/` 但没有 `~/.claude/` 的机器上，无参数运行安装器会自动进入 `--kimi` 模式。监视守护进程会在安装时启动，并通过 LaunchAgent 在每次登录时重新启动。
+
+**与 Claude 安装共享语音包：**
+
+如果 `~/.claude/hooks/peon-ping/packs/` 已存在并包含语音包，`--kimi` 安装会将 `~/.kimi/hooks/peon-ping/packs` 软链接到它，而不是重新下载。一次下载即可服务两个 IDE，从任一侧执行 `peon packs install <name>` 都会更新共享的包集。状态、配置和静音切换在每个安装中保持独立。传递 `--no-shared-packs`（或 `--packs=` / `--all`）以下载独立副本。
+
 **事件映射：**
 
 - 新会话 → 问候音效（*"Ready to work?"*、*"Yes?"*）

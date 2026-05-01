@@ -1079,6 +1079,22 @@ bash ~/.claude/hooks/peon-ping/adapters/kimi.sh --uninstall
 
 Requires `fswatch` (`brew install fswatch`) on macOS or `inotifywait` (`apt install inotify-tools`) on Linux. The `curl | bash` installer auto-detects Kimi Code and starts the daemon.
 
+**On macOS, `--install` registers a LaunchAgent** at `~/Library/LaunchAgents/com.peonping.kimi-adapter.plist` so the watcher auto-starts on login and auto-restarts on crash — survives reboots without re-running `--install`. Set `KIMI_NO_LAUNCHD=1` to fall back to `nohup`+pidfile (e.g. for tests). Linux always uses `nohup`+pidfile.
+
+**Kimi-only install (no Claude required):**
+
+If you don't have Claude Code and just want peon-ping for Kimi, install with `--kimi`:
+
+```bash
+curl -fsSL peonping.com/install | bash -s -- --kimi
+```
+
+Files land in `~/.kimi/hooks/peon-ping/` instead of `~/.claude/hooks/peon-ping/`, and no `~/.claude/` directory is created. The installer also auto-detects this layout: running it with no flags on a machine that has `~/.kimi/` but no `~/.claude/` selects `--kimi` mode automatically. The watcher daemon starts during install and re-starts on every login via the LaunchAgent.
+
+**Sharing voice packs with a Claude install:**
+
+If `~/.claude/hooks/peon-ping/packs/` already exists with packs, a `--kimi` install symlinks `~/.kimi/hooks/peon-ping/packs` at it instead of re-downloading. One pack download serves both IDEs, and `peon packs install <name>` from either side updates the shared set. State, config, and mute toggles stay isolated per install. Pass `--no-shared-packs` (or `--packs=` / `--all`) to download a separate copy.
+
 **Event mapping:**
 
 - New session → Greeting sound (*"Ready to work?"*, *"Yes?"*)
