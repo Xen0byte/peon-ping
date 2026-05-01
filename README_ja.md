@@ -263,6 +263,9 @@ peon packs ide-bindings   # すべての IDE ベースのバインド一覧
 peon packs exclude add <path> # glob またはディレクトリで path_rules をスキップ
 peon packs exclude remove <path> # 除外パスを削除
 peon packs exclude list   # 除外パスの一覧
+peon sounds list [pack]   # パック内のサウンド一覧（無効化済みは印付き）
+peon sounds disable <category> <file> [--pack=<name>]  # パック内の特定サウンドを無効化
+peon sounds enable <category> <file> [--pack=<name>]   # 無効化したサウンドを再有効化
 peon notifications on     # デスクトップ通知を有効化
 peon notifications off    # デスクトップ通知を無効化
 peon notifications overlay   # 大型オーバーレイバナーを使用（デフォルト）
